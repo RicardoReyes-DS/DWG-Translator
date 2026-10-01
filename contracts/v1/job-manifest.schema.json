@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dwgtranslator.internal/contracts/v1/job-manifest.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "jobId", "state", "version", "createdAtUtc", "updatedAtUtc", "source", "output", "translation", "contractVersions", "counts", "secretReference"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "jobId": { "$ref": "common.schema.json#/$defs/uuid" },
+    "state": { "enum": ["Draft", "Inspecting", "Extracted", "Translating", "ReviewRequired", "Approved", "Writing", "Validating", "Completed", "Failed", "Cancelled"] },
+    "version": { "type": "integer", "minimum": 0 },
+    "createdAtUtc": { "$ref": "common.schema.json#/$defs/utcTimestamp" },
+    "updatedAtUtc": { "$ref": "common.schema.json#/$defs/utcTimestamp" },
+    "source": {
+      "type": "object",
+      "required": ["path", "contentHash", "sizeBytes"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "contentHash": { "$ref": "common.schema.json#/$defs/sha256" },
+        "sizeBytes": { "type": "integer", "minimum": 1 },
+        "dwgVersion": { "type": ["string", "null"], "maxLength": 80 }
+      },
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "required": ["requestedPath", "overwritePolicy"],
+      "properties": {
+        "requestedPath": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "overwritePolicy": { "const": "FailIfExists" }
+      },
+      "additionalProperties": false
+    },
+    "translation": {
+      "type": "object",
+      "required": ["targetLanguage", "adapter", "model", "promptTemplateVersion"],
+      "properties": {
+        "sourceLanguage": { "oneOf": [{ "$ref": "common.schema.json#/$defs/languageTag" }, { "type": "null" }] },
+        "targetLanguage": { "$ref": "common.schema.json#/$defs/languageTag" },
+        "adapter": { "const": "OpenAI" },
+        "model": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "promptTemplateVersion": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "glossaryHash": { "oneOf": [{ "$ref": "common.schema.json#/$defs/sha256" }, { "type": "null" }] }
+      },
+      "additionalProperties": false
+    },
+    "contractVersions": {
+      "type": "object",
+      "required": ["ipc", "job", "translation"],
+      "properties": {
+        "ipc": { "const": "1.0.0" },
+        "job": { "const": "1.0.0" },
+        "translation": { "const": "1.0.0" }
+      },
+      "additionalProperties": false
+    },
+    "counts": {
+      "type": "object",
+      "required": ["selected", "approved", "excluded", "unsupported", "errors"],
+      "properties": {
+        "selected": { "type": "integer", "minimum": 0 },
+        "approved": { "type": "integer", "minimum": 0 },
+        "excluded": { "type": "integer", "minimum": 0 },
+        "unsupported": { "type": "integer", "minimum": 0 },
+        "errors": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "secretReference": { "type": "string", "pattern": "^credential-manager:dwg-translator/[A-Za-z0-9._/-]+$", "maxLength": 160 }
+  },
+  "additionalProperties": false
+}

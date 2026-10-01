@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dwgtranslator.internal/contracts/v1/installer-lifecycle-authorization.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "authorizationId", "executeInstallerLifecycle", "oneTimeUse", "planSha256", "baselineSha256", "candidateSha256", "environment", "issuedAtUtc", "expiresAtUtc"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "authorizationId": { "type": "string", "format": "uuid", "not": { "const": "00000000-0000-0000-0000-000000000000" } },
+    "executeInstallerLifecycle": { "const": true },
+    "oneTimeUse": { "const": true },
+    "planSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "baselineSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "candidateSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "environment": { "const": "disposable-clean-windows" },
+    "issuedAtUtc": { "type": "string", "format": "date-time", "pattern": "Z$" },
+    "expiresAtUtc": { "type": "string", "format": "date-time", "pattern": "Z$" }
+  },
+  "additionalProperties": false
+}

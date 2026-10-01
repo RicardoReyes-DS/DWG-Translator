@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dwgtranslator.internal/contracts/v1/write.schema.json",
+  "title": "CAD write operation v1",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/response" },
+    { "$ref": "#/$defs/failure" }
+  ],
+  "$defs": {
+    "request": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/requestEnvelope" },
+        {
+          "properties": {
+            "messageType": { "const": "cad.job.write.request" },
+            "payload": {
+              "type": "object",
+              "required": ["sourcePath", "expectedSourceHash", "candidatePath", "finalPath", "overwritePolicy", "approvalCoverage", "mappings", "validationPolicy"],
+              "properties": {
+                "sourcePath": { "type": "string", "minLength": 1, "maxLength": 1024 },
+                "expectedSourceHash": { "$ref": "common.schema.json#/$defs/sha256" },
+                "candidatePath": { "type": "string", "minLength": 1, "maxLength": 1024 },
+                "finalPath": { "type": "string", "minLength": 1, "maxLength": 1024 },
+                "overwritePolicy": { "const": "FailIfExists" },
+                "approvalCoverage": {
+                  "type": "object",
+                  "required": ["selected", "approved", "excluded", "complete"],
+                  "properties": {
+                    "selected": { "type": "integer", "minimum": 1 },
+                    "approved": { "type": "integer", "minimum": 0 },
+                    "excluded": { "type": "integer", "minimum": 0 },
+                    "complete": { "const": true }
+                  },
+                  "additionalProperties": false
+                },
+                "mappings": { "type": "array", "minItems": 1, "maxItems": 100000, "items": { "$ref": "#/$defs/mapping" } },
+                "validationPolicy": { "enum": ["MvpStrictV1", "VisualStrictV2"] }
+              },
+              "allOf": [
+                {
+                  "if": { "properties": { "validationPolicy": { "const": "VisualStrictV2" } }, "required": ["validationPolicy"] },
+                  "then": { "properties": { "mappings": { "items": { "allOf": [{ "$ref": "#/$defs/mapping" }, { "required": ["expectedEntityType", "expectedSpace", "expectedLayout", "expectedLayer"] }] } } } }
+                }
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "response": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/successResponseEnvelope" },
+        {
+          "properties": {
+            "messageType": { "const": "cad.job.write.response" },
+            "status": { "const": "Succeeded" },
+            "payload": {
+              "type": "object",
+              "required": ["candidateHash", "sourceHashAfter", "applied", "validation", "promotion"],
+              "properties": {
+                "candidateHash": { "$ref": "common.schema.json#/$defs/sha256" },
+                "sourceHashAfter": { "$ref": "common.schema.json#/$defs/sha256" },
+                "applied": { "type": "array", "minItems": 1, "maxItems": 100000, "items": { "$ref": "#/$defs/applied" } },
+                "validation": { "oneOf": [{ "$ref": "cad-operation.schema.json#/$defs/validation" }, { "$ref": "#/$defs/writeValidation" }] },
+                "promotion": {
+                  "type": "object",
+                  "required": ["performed", "finalPath"],
+                  "properties": {
+                    "performed": { "const": true },
+                    "finalPath": { "type": "string", "minLength": 1, "maxLength": 1024 }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "allOf": [
+                {
+                  "if": { "properties": { "validation": { "properties": { "policy": { "const": "VisualStrictV2" } }, "required": ["policy"] } }, "required": ["validation"] },
+                  "then": { "properties": { "applied": { "items": { "allOf": [{ "$ref": "#/$defs/applied" }, { "required": ["visualEvidence"] }] } } } }
+                }
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "failure": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/failureResponseEnvelope" },
+        { "properties": { "messageType": { "const": "cad.job.write.response" } } }
+      ]
+    },
+    "mapping": {
+      "type": "object",
+      "required": ["segmentId", "handle", "expectedSourceTextHash", "approvedFinalText", "approvedFinalTextHash"],
+      "properties": {
+        "segmentId": { "$ref": "common.schema.json#/$defs/segmentId" },
+        "handle": { "type": "string", "pattern": "^[0-9A-F]+$", "maxLength": 32 },
+        "expectedSourceTextHash": { "$ref": "common.schema.json#/$defs/sha256" },
+        "approvedFinalText": { "type": "string", "minLength": 1, "maxLength": 65535 },
+        "approvedFinalTextHash": { "$ref": "common.schema.json#/$defs/sha256" },
+        "expectedEntityType": { "enum": ["TEXT", "MTEXT"] },
+        "expectedSpace": { "enum": ["ModelSpace", "PaperSpace"] },
+        "expectedLayout": { "type": ["string", "null"], "maxLength": 255 },
+        "expectedLayer": { "type": "string", "minLength": 1, "maxLength": 255 }
+      },
+      "additionalProperties": false
+    },
+    "applied": {
+      "type": "object",
+      "required": ["segmentId", "result", "postWriteTextHash"],
+      "properties": {
+        "segmentId": { "$ref": "common.schema.json#/$defs/segmentId" },
+        "result": { "const": "WriteSucceeded" },
+        "postWriteTextHash": { "$ref": "common.schema.json#/$defs/sha256" },
+        "visualEvidence": { "$ref": "#/$defs/visualEvidence" }
+      },
+      "additionalProperties": false
+    },
+    "visualEvidence": {
+      "type": "object",
+      "required": ["beforeProperties", "afterProperties", "beforeFingerprint", "afterFingerprint", "invariantMatch", "beforeExtents", "afterExtents", "boundsChanged", "visualReviewRequired"],
+      "properties": {
+        "beforeProperties": { "$ref": "#/$defs/visualProperties" },
+        "afterProperties": { "$ref": "#/$defs/visualProperties" },
+        "beforeFingerprint": { "$ref": "common.schema.json#/$defs/sha256" },
+        "afterFingerprint": { "$ref": "common.schema.json#/$defs/sha256" },
+        "invariantMatch": { "const": true },
+        "beforeExtents": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "afterExtents": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "boundsChanged": { "type": "boolean" },
+        "visualReviewRequired": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "visualProperties": {
+      "type": "object",
+      "minProperties": 17,
+      "maxProperties": 22,
+      "propertyNames": { "pattern": "^[a-z][A-Za-z0-9]+$" },
+      "additionalProperties": { "type": "string", "maxLength": 1024 }
+    },
+    "writeValidation": {
+      "type": "object",
+      "required": ["reopenedByAutoCAD", "entityMappingValid", "geometryInvariantsValid", "formatTokenIntegrityValid", "visualInvariantsValid", "policy"],
+      "properties": {
+        "reopenedByAutoCAD": { "const": true },
+        "entityMappingValid": { "const": true },
+        "geometryInvariantsValid": { "const": true },
+        "formatTokenIntegrityValid": { "const": true },
+        "visualInvariantsValid": { "const": true },
+        "policy": { "const": "VisualStrictV2" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

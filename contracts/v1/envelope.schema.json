@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dwgtranslator.internal/contracts/v1/envelope.schema.json",
+  "title": "DWG Translator generic envelope v1",
+  "oneOf": [
+    { "$ref": "common.schema.json#/$defs/requestEnvelope" },
+    { "$ref": "common.schema.json#/$defs/successResponseEnvelope" },
+    { "$ref": "common.schema.json#/$defs/failureResponseEnvelope" }
+  ]
+}

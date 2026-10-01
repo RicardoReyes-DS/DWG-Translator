@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dwgtranslator.internal/contracts/v1/audit-event.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "eventId", "eventType", "timestampUtc", "jobId", "correlationId", "component", "severity", "data", "redaction"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "eventId": { "$ref": "common.schema.json#/$defs/uuid" },
+    "eventType": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "timestampUtc": { "$ref": "common.schema.json#/$defs/utcTimestamp" },
+    "jobId": { "$ref": "common.schema.json#/$defs/uuid" },
+    "correlationId": { "$ref": "common.schema.json#/$defs/uuid" },
+    "component": { "enum": ["Shell", "Orchestrator", "Domain", "TranslationAdapter", "CadBoundary", "JobStore"] },
+    "severity": { "enum": ["Debug", "Information", "Warning", "Error", "Critical"] },
+    "data": {
+      "type": "object",
+      "propertyNames": { "enum": ["jobId", "correlationId", "component", "eventType", "reasonCode", "durationMs", "state", "from", "to", "selected", "approved", "excluded", "unsupported", "errors", "sourceHash", "configurationHash", "contractVersion", "modelId", "promptTemplateVersion"] },
+      "additionalProperties": { "type": ["string", "integer", "number", "boolean", "null"] }
+    },
+    "redaction": {
+      "type": "object",
+      "required": ["policyVersion", "drawingTextIncluded", "secretsIncluded"],
+      "properties": {
+        "policyVersion": { "const": "1.0" },
+        "drawingTextIncluded": { "const": false },
+        "secretsIncluded": { "const": false }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../DwgTranslator.Contracts/DwgTranslator.Contracts.csproj" />
+  </ItemGroup>
+</Project>

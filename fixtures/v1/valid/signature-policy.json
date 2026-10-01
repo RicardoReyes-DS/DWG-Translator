@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "1.0.0",
+  "product": "DWG Translator",
+  "allowedSignToolSha256": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+  "allowedSignToolSignerThumbprints": ["1111111111111111111111111111111111111111"],
+  "allowedPublisherThumbprints": ["2222222222222222222222222222222222222222"],
+  "expectedProductVersion": "0.1.0"
+}

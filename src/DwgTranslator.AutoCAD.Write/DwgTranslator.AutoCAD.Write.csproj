@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <PlatformTarget>x64</PlatformTarget>
+    <Version>0.4.0</Version>
+    <AutoCADInstallDir Condition="'$(AutoCADInstallDir)' == ''">$(AUTOCAD_INSTALL_DIR)</AutoCADInstallDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../DwgTranslator.Application/DwgTranslator.Application.csproj" />
+    <ProjectReference Include="../DwgTranslator.Contracts/DwgTranslator.Contracts.csproj" />
+    <ProjectReference Include="../DwgTranslator.Transport.Core/DwgTranslator.Transport.Core.csproj" />
+    <ProjectReference Include="../DwgTranslator.Transport.Windows/DwgTranslator.Transport.Windows.csproj" />
+  </ItemGroup>
+  <ItemGroup><FrameworkReference Include="Microsoft.WindowsDesktop.App" /></ItemGroup>
+  <ItemGroup>
+    <Reference Include="AcCoreMgd" HintPath="$(AutoCADInstallDir)\AcCoreMgd.dll" Private="false" />
+    <Reference Include="AcDbMgd" HintPath="$(AutoCADInstallDir)\AcDbMgd.dll" Private="false" />
+    <Reference Include="AcMgd" HintPath="$(AutoCADInstallDir)\AcMgd.dll" Private="false" />
+  </ItemGroup>
+</Project>

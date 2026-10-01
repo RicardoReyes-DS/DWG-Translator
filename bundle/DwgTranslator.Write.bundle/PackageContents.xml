@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage SchemaVersion="1.0" Name="DWG Translator Write Adapter" AppVersion="0.4.0"
+                    ProductCode="{73CAB40F-2CC1-4192-B095-FBD96572D886}" UpgradeCode="{3CE40149-6342-495D-9427-AF578FA945A2}"
+                    Author="Ricardo Reyes" Description="Approved candidate DWG writing adapter">
+  <CompanyDetails Name="Ricardo Reyes" />
+  <Components Description="AutoCAD managed write adapter">
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R25.1" SeriesMax="R25.1" />
+    <ComponentEntry AppName="DwgTranslator.AutoCAD.Write" ModuleName="./Contents/Windows/DwgTranslator.AutoCAD.Write.dll"
+                    AppDescription="Approved TEXT and MTEXT candidate writing and validation" LoadOnAutoCADStartup="False" />
+  </Components>
+</ApplicationPackage>

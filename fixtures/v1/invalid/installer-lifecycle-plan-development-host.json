@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0.0",
+  "product": "DWG Translator",
+  "sourceRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "producedAtUtc": "2026-08-14T00:00:00Z",
+  "expiresAtUtc": "2026-08-15T00:00:00Z",
+  "environment": "cad-development-pc",
+  "requiresElevation": false,
+  "requiredAutoCadProcessCount": 1,
+  "publisherThumbprint": "2222222222222222222222222222222222222222",
+  "baseline": {},
+  "candidate": {},
+  "steps": []
+}

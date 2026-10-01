@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.0.0",
+  "messageType": "review.decision.recorded",
+  "jobId": "2a354ebb-26bc-4b8d-a31d-18a983f93d83",
+  "correlationId": "b0c49176-b12d-4733-81df-1074cd6459a7",
+  "idempotencyKey": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "sentAtUtc": "2026-08-11T20:04:00Z",
+  "payload": {
+    "segmentId": "seg_sha256_3a7ca53637585404b2f0c4793b1af59d3789e268dae46feb6344eb5384893353",
+    "decision": "Approved",
+    "proposedTextHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "finalText": "BOMBA {TAG_01}",
+    "finalTextHash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "reviewedAtUtc": "2026-08-11T20:04:00Z",
+    "reviewer": { "type": "LocalOperator", "displayIdentifier": "redacted-local-user" },
+    "reasonCode": null
+  }
+}

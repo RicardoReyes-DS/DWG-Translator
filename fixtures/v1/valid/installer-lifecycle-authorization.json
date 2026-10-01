@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "1.0.0",
+  "authorizationId": "44444444-4444-4444-8444-444444444444",
+  "executeInstallerLifecycle": true,
+  "oneTimeUse": true,
+  "planSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "baselineSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "candidateSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "environment": "disposable-clean-windows",
+  "issuedAtUtc": "2026-08-14T00:00:00Z",
+  "expiresAtUtc": "2026-08-14T00:30:00Z"
+}

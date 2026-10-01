@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "gateId": "cad-capabilities",
+  "sourceRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "outcome": "pass",
+  "producedAtUtc": "2026-08-13T18:00:00Z",
+  "producer": "DwgTranslator.Phase4S.CapabilitiesGate/1.0.0",
+  "evidence": [
+    {
+      "path": "proof/cad-capabilities.json",
+      "size": 128,
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ],
+  "facts": {
+    "result": "pass",
+    "cleanup": "pass",
+    "singleSession": "true"
+  }
+}

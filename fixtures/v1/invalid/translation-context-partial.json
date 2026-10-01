@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0.0",
+  "messageType": "translation.batch.request",
+  "jobId": "2a354ebb-26bc-4b8d-a31d-18a983f93d83",
+  "correlationId": "a4ed9591-75dd-4b67-9510-54a3ce2540c6",
+  "idempotencyKey": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "sentAtUtc": "2026-08-11T20:01:00Z",
+  "payload": {
+    "sourceLanguage": "en", "targetLanguage": "es-MX", "promptTemplateVersion": "translate-cad-text/1.0", "glossary": [],
+    "segments": [{
+      "segmentId": "seg_sha256_3a7ca53637585404b2f0c4793b1af59d3789e268dae46feb6344eb5384893353",
+      "textWithTokenAliases": "PUMP", "protectedTokenAliases": {},
+      "context": {
+        "entityType": "TEXT", "space": "ModelSpace", "layout": null, "layer": "NOTES", "blockPath": [],
+        "contextVersion": "cad-semantic-context/1.0"
+      }
+    }]
+  }
+}

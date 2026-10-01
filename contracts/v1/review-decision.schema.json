@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dwgtranslator.internal/contracts/v1/review-decision.schema.json",
+  "allOf": [
+    { "$ref": "common.schema.json#/$defs/requestEnvelope" },
+    {
+      "properties": {
+        "messageType": { "const": "review.decision.recorded" },
+        "payload": {
+          "type": "object",
+          "required": ["segmentId", "decision", "proposedTextHash", "finalText", "finalTextHash", "reviewedAtUtc", "reviewer", "reasonCode"],
+          "properties": {
+            "segmentId": { "$ref": "common.schema.json#/$defs/segmentId" },
+            "decision": { "enum": ["Approved", "Edited", "Excluded"] },
+            "proposedTextHash": { "$ref": "common.schema.json#/$defs/sha256" },
+            "finalText": { "type": ["string", "null"], "maxLength": 65535 },
+            "finalTextHash": { "oneOf": [{ "$ref": "common.schema.json#/$defs/sha256" }, { "type": "null" }] },
+            "reviewedAtUtc": { "$ref": "common.schema.json#/$defs/utcTimestamp" },
+            "reviewer": {
+              "type": "object",
+              "required": ["type", "displayIdentifier"],
+              "properties": {
+                "type": { "const": "LocalOperator" },
+                "displayIdentifier": { "type": "string", "minLength": 1, "maxLength": 160 }
+              },
+              "additionalProperties": false
+            },
+            "reasonCode": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]+$", "maxLength": 80 }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "decision": { "const": "Excluded" } }, "required": ["decision"] },
+              "then": { "properties": { "finalText": { "type": "null" }, "finalTextHash": { "type": "null" }, "reasonCode": { "type": "string", "minLength": 1 } } },
+              "else": { "properties": { "finalText": { "type": "string", "minLength": 1 }, "finalTextHash": { "$ref": "common.schema.json#/$defs/sha256" }, "reasonCode": { "type": "null" } } }
+            }
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

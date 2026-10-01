@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0.0",
+  "product": "DWG Translator",
+  "sourceRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "producedAtUtc": "2026-08-13T20:00:00Z",
+  "signToolSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "artifacts": [
+    { "path": "app/DwgTranslator.Shell.exe", "size": 100, "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "signerThumbprint": "2222222222222222222222222222222222222222", "timestampThumbprint": "3333333333333333333333333333333333333333" },
+    { "path": "app/DwgTranslator.Shell.dll", "size": 100, "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "signerThumbprint": "2222222222222222222222222222222222222222", "timestampThumbprint": "3333333333333333333333333333333333333333" },
+    { "path": "Autodesk/ApplicationPlugins/DwgTranslator.ReadOnly.bundle/Contents/Windows/DwgTranslator.AutoCAD.ReadOnly.dll", "size": 100, "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "signerThumbprint": "2222222222222222222222222222222222222222", "timestampThumbprint": "3333333333333333333333333333333333333333" },
+    { "path": "installer/DwgTranslator.Internal.msi", "size": 100, "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "signerThumbprint": "2222222222222222222222222222222222222222", "timestampThumbprint": "3333333333333333333333333333333333333333" }
+  ]
+}

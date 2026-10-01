@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net8.0-windows7.0": {
+      "dwgtranslator.contracts": {
+        "type": "Project"
+      },
+      "dwgtranslator.transport.core": {
+        "type": "Project",
+        "dependencies": {
+          "DwgTranslator.Contracts": "[1.0.26, )"
+        }
+      }
+    }
+  }
+}

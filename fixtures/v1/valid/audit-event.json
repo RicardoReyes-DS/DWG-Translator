@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "1.0.0",
+  "eventId": "f12498dd-044d-4ccd-b355-c353041e9355",
+  "eventType": "JobStateChanged",
+  "timestampUtc": "2026-08-11T20:05:00Z",
+  "jobId": "2a354ebb-26bc-4b8d-a31d-18a983f93d83",
+  "correlationId": "b0c49176-b12d-4733-81df-1074cd6459a7",
+  "component": "Orchestrator",
+  "severity": "Information",
+  "data": { "from": "ReviewRequired", "to": "Approved", "selected": 2, "approved": 1, "excluded": 1, "sourceHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+  "redaction": { "policyVersion": "1.0", "drawingTextIncluded": false, "secretsIncluded": false }
+}

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../DwgTranslator.Contracts/DwgTranslator.Contracts.csproj" />
+    <ProjectReference Include="../DwgTranslator.Transport.Core/DwgTranslator.Transport.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dwgtranslator.internal/contracts/v1/installer-lifecycle-plan.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "product", "sourceRevision", "producedAtUtc", "expiresAtUtc", "environment", "requiresElevation", "requiredAutoCadProcessCount", "publisherThumbprint", "baseline", "candidate", "steps"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "product": { "const": "DWG Translator" },
+    "sourceRevision": { "$ref": "#/$defs/revision" },
+    "producedAtUtc": { "type": "string", "format": "date-time", "pattern": "Z$" },
+    "expiresAtUtc": { "type": "string", "format": "date-time", "pattern": "Z$" },
+    "environment": { "const": "disposable-clean-windows" },
+    "requiresElevation": { "const": true },
+    "requiredAutoCadProcessCount": { "const": 0 },
+    "publisherThumbprint": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "baseline": { "$ref": "#/$defs/installer" },
+    "candidate": { "$ref": "#/$defs/installer" },
+    "steps": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "assert-clean-machine" },
+        { "const": "install-baseline" },
+        { "const": "repair-baseline" },
+        { "const": "upgrade-candidate" },
+        { "const": "cancel-candidate-and-verify-windows-installer-rollback" },
+        { "const": "uninstall-candidate" },
+        { "const": "assert-clean-machine-restored" }
+      ],
+      "items": false,
+      "minItems": 7,
+      "maxItems": 7
+    }
+  },
+  "$defs": {
+    "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "installer": {
+      "type": "object",
+      "required": ["fileName", "size", "sha256", "productVersion", "productCode", "sourceRevision"],
+      "properties": {
+        "fileName": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,119}\\.msi$" },
+        "size": { "type": "integer", "minimum": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "productVersion": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(\\.(0|[1-9][0-9]*))?$" },
+        "productCode": { "type": "string", "pattern": "^\\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\\}$" },
+        "sourceRevision": { "$ref": "#/$defs/revision" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

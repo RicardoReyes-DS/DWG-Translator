@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage SchemaVersion="1.0" Name="DWG Translator Read-Only Adapter" AppVersion="0.3.0"
+                    ProductCode="{B22FC699-C48B-4935-A4A8-AEBC2BDE1474}" UpgradeCode="{A4CBA7D8-8615-4995-A9BC-89068FE4C66A}"
+                    Author="Ricardo Reyes" Description="Read-only DWG text inspection adapter">
+  <CompanyDetails Name="Ricardo Reyes" />
+  <Components Description="AutoCAD managed read-only adapter">
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R25.1" SeriesMax="R25.1" />
+    <ComponentEntry AppName="DwgTranslator.AutoCAD.ReadOnly" ModuleName="./Contents/Windows/DwgTranslator.AutoCAD.ReadOnly.dll"
+                    AppDescription="Read-only TEXT and MTEXT inspection" LoadOnAutoCADStartup="False" />
+  </Components>
+</ApplicationPackage>

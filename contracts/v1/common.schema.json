@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dwgtranslator.internal/contracts/v1/common.schema.json",
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "segmentId": {
+      "type": "string",
+      "pattern": "^seg_sha256_[0-9a-f]{64}$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "languageTag": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
+    },
+    "error": {
+      "type": "object",
+      "required": ["code", "category", "message", "retryable"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" },
+        "category": {
+          "enum": ["Input", "Unsupported", "Integrity", "Environment", "Concurrency", "Contract", "Transport", "Translation", "Storage", "Security", "Configuration", "Internal"]
+        },
+        "message": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "retryable": { "type": "boolean" },
+        "operatorAction": { "type": ["string", "null"], "maxLength": 500 },
+        "diagnosticId": { "type": ["string", "null"], "maxLength": 128 },
+        "technicalStage": {
+          "type": ["string", "null"],
+          "enum": [null, "visual-strict-v2.preflight", "visual-strict-v2.normalized-baseline.copy", "visual-strict-v2.normalized-baseline.open", "visual-strict-v2.normalized-baseline.prime", "visual-strict-v2.normalized-baseline.save", "visual-strict-v2.normalized-baseline.stabilize", "visual-strict-v2.source.revalidate", "visual-strict-v2.candidate.copy", "visual-strict-v2.candidate.open", "visual-strict-v2.candidate.apply", "visual-strict-v2.candidate.save", "visual-strict-v2.candidate.stabilize", "visual-strict-v2.invariant.compare", "visual-strict-v2.normalized-baseline.cleanup", "visual-strict-v2.candidate.promote", "visual-strict-v2.promotion.verify"]
+        },
+        "nativeErrorStatus": {
+          "type": ["string", "null"],
+          "enum": [null, "InvalidInput", "InvalidOpenState", "NotOpenForRead", "NotOpenForWrite", "WasNotOpenForWrite", "NoDatabase", "GeneralModelingFailure", "FilerError", "DwgNeedsRecovery", "FileAccessErr", "FileSystemErr", "FileInternalErr", "FileLockedByAutoCAD", "FileSharingViolation", "OutOfDisk", "OutOfMemory", "DatabaseObjectsOpen", "LockViolation", "LockConflict", "NoDocument", "TargetDocNotQuiescent", "InvalidContext"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "requestEnvelope": {
+      "type": "object",
+      "required": ["schemaVersion", "messageType", "jobId", "correlationId", "idempotencyKey", "sentAtUtc", "payload"],
+      "properties": {
+        "schemaVersion": { "const": "1.0.0" },
+        "messageType": { "type": "string", "pattern": "^[a-z]+(?:[.-][a-z]+)*$", "maxLength": 80 },
+        "jobId": { "$ref": "#/$defs/uuid" },
+        "correlationId": { "$ref": "#/$defs/uuid" },
+        "idempotencyKey": { "$ref": "#/$defs/sha256" },
+        "sentAtUtc": { "$ref": "#/$defs/utcTimestamp" },
+        "payload": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "successResponseEnvelope": {
+      "type": "object",
+      "required": ["schemaVersion", "messageType", "jobId", "correlationId", "idempotencyKey", "sentAtUtc", "status", "payload"],
+      "properties": {
+        "schemaVersion": { "const": "1.0.0" },
+        "messageType": { "type": "string", "pattern": "^[a-z]+(?:[.-][a-z]+)*$", "maxLength": 80 },
+        "jobId": { "$ref": "#/$defs/uuid" },
+        "correlationId": { "$ref": "#/$defs/uuid" },
+        "idempotencyKey": { "$ref": "#/$defs/sha256" },
+        "sentAtUtc": { "$ref": "#/$defs/utcTimestamp" },
+        "status": { "enum": ["Succeeded", "Accepted", "InProgress", "CancelPending", "Cancelled"] },
+        "payload": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "failureResponseEnvelope": {
+      "type": "object",
+      "required": ["schemaVersion", "messageType", "jobId", "correlationId", "idempotencyKey", "sentAtUtc", "status", "error"],
+      "properties": {
+        "schemaVersion": { "const": "1.0.0" },
+        "messageType": { "type": "string", "pattern": "^[a-z]+(?:[.-][a-z]+)*$", "maxLength": 80 },
+        "jobId": { "$ref": "#/$defs/uuid" },
+        "correlationId": { "$ref": "#/$defs/uuid" },
+        "idempotencyKey": { "$ref": "#/$defs/sha256" },
+        "sentAtUtc": { "$ref": "#/$defs/utcTimestamp" },
+        "status": { "const": "Failed" },
+        "error": { "$ref": "#/$defs/error" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

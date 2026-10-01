@@ -1,0 +1,400 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dwgtranslator.internal/contracts/v1/cad-operation.schema.json",
+  "title": "CAD read/control operations v1",
+  "oneOf": [
+    { "$ref": "#/$defs/capabilitiesRequest" },
+    { "$ref": "#/$defs/capabilitiesResponse" },
+    { "$ref": "#/$defs/inspectRequest" },
+    { "$ref": "#/$defs/inspectResponse" },
+    { "$ref": "#/$defs/extractRequest" },
+    { "$ref": "#/$defs/extractResponse" },
+    { "$ref": "#/$defs/validateRequest" },
+    { "$ref": "#/$defs/validateResponse" },
+    { "$ref": "#/$defs/statusRequest" },
+    { "$ref": "#/$defs/statusResponse" },
+    { "$ref": "#/$defs/cancelRequest" },
+    { "$ref": "#/$defs/cancelResponse" },
+    { "$ref": "#/$defs/progressEvent" },
+    { "$ref": "#/$defs/failureResponse" }
+  ],
+  "$defs": {
+    "capabilitiesRequest": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/requestEnvelope" },
+        {
+          "properties": {
+            "messageType": { "const": "cad.capabilities.get.request" },
+            "payload": {
+              "type": "object",
+              "required": ["protocolVersion", "sessionNonce"],
+              "properties": {
+                "protocolVersion": { "const": "1.0.0" },
+                "sessionNonce": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "capabilitiesResponse": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/successResponseEnvelope" },
+        {
+          "properties": {
+            "messageType": { "const": "cad.capabilities.get.response" },
+            "status": { "const": "Succeeded" },
+            "payload": {
+              "type": "object",
+              "required": ["protocolVersion", "hostVersion", "operations"],
+              "properties": {
+                "protocolVersion": { "const": "1.0.0" },
+                "hostVersion": { "type": "string", "minLength": 1, "maxLength": 120 },
+                "operations": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "maxLength": 80 } }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "inspectRequest": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/requestEnvelope" },
+        {
+          "properties": {
+            "messageType": { "const": "cad.job.inspect.request" },
+            "payload": {
+              "type": "object",
+              "required": ["sourcePath", "expectedSourceHash", "readOnly", "includeSpaces", "supportedEntityTypes", "classifyFields", "followExternalReferences"],
+              "properties": {
+                "sourcePath": { "type": "string", "minLength": 1, "maxLength": 1024 },
+                "expectedSourceHash": { "$ref": "common.schema.json#/$defs/sha256" },
+                "readOnly": { "const": true },
+                "includeSpaces": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 3,
+                  "uniqueItems": true,
+                  "items": { "enum": ["ModelSpace", "PaperSpace", "BlockDefinitions"] },
+                  "allOf": [{ "contains": { "const": "ModelSpace" } }, { "contains": { "const": "PaperSpace" } }]
+                },
+                "supportedEntityTypes": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "uniqueItems": true,
+                  "items": { "enum": ["TEXT", "MTEXT"] },
+                  "allOf": [{ "contains": { "const": "TEXT" } }, { "contains": { "const": "MTEXT" } }]
+                },
+                "classifyFields": { "const": true },
+                "followExternalReferences": { "const": false }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "inspectResponse": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/successResponseEnvelope" },
+        {
+          "properties": {
+            "messageType": { "const": "cad.job.inspect.response" },
+            "status": { "const": "Succeeded" },
+            "payload": {
+              "type": "object",
+              "required": ["sourceHash", "autocad", "drawingFingerprint", "inventory", "supportedCount", "unsupported", "warnings"],
+              "properties": {
+                "sourceHash": { "$ref": "common.schema.json#/$defs/sha256" },
+                "autocad": {
+                  "type": "object",
+                  "required": ["product", "year", "apiVersion"],
+                  "properties": {
+                    "product": { "const": "AutoCAD" },
+                    "year": { "type": "integer", "minimum": 2026 },
+                    "apiVersion": { "type": "string", "minLength": 1, "maxLength": 120 }
+                  },
+                  "additionalProperties": false
+                },
+                "drawingFingerprint": { "$ref": "common.schema.json#/$defs/sha256" },
+                "inventory": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 }, "maxProperties": 1000 },
+                "supportedCount": { "type": "integer", "minimum": 0 },
+                "unsupported": { "type": "array", "maxItems": 100000, "items": { "$ref": "#/$defs/unsupported" } },
+                "warnings": { "type": "array", "maxItems": 10000, "items": { "type": "string", "maxLength": 500 } }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "extractRequest": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/requestEnvelope" },
+        {
+          "properties": {
+            "messageType": { "const": "cad.job.extract.request" },
+            "payload": {
+              "type": "object",
+              "required": ["sourcePath", "expectedSourceHash", "entityTypes", "excludeFieldBackedText"],
+              "properties": {
+                "sourcePath": { "type": "string", "minLength": 1, "maxLength": 1024 },
+                "expectedSourceHash": { "$ref": "common.schema.json#/$defs/sha256" },
+                "entityTypes": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "uniqueItems": true,
+                  "items": { "enum": ["TEXT", "MTEXT"] },
+                  "allOf": [{ "contains": { "const": "TEXT" } }, { "contains": { "const": "MTEXT" } }]
+                },
+                "excludeFieldBackedText": { "const": true }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "extractResponse": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/successResponseEnvelope" },
+        {
+          "properties": {
+            "messageType": { "const": "cad.job.extract.response" },
+            "status": { "const": "Succeeded" },
+            "payload": {
+              "type": "object",
+              "required": ["sourceHash", "segments", "excludedFieldCount"],
+              "properties": {
+                "sourceHash": { "$ref": "common.schema.json#/$defs/sha256" },
+                "segments": { "type": "array", "maxItems": 100000, "items": { "$ref": "#/$defs/segment" } },
+                "excludedFieldCount": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "validateRequest": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/requestEnvelope" },
+        {
+          "properties": {
+            "messageType": { "const": "cad.job.validate.request" },
+            "payload": {
+              "type": "object",
+              "required": ["candidatePath", "expectedCandidateHash", "validationPolicy"],
+              "properties": {
+                "candidatePath": { "type": "string", "minLength": 1, "maxLength": 1024 },
+                "expectedCandidateHash": { "$ref": "common.schema.json#/$defs/sha256" },
+                "validationPolicy": { "const": "MvpStrictV1" }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "validateResponse": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/successResponseEnvelope" },
+        {
+          "properties": {
+            "messageType": { "const": "cad.job.validate.response" },
+            "status": { "const": "Succeeded" },
+            "payload": { "$ref": "#/$defs/validation" }
+          }
+        }
+      ]
+    },
+    "statusRequest": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/requestEnvelope" },
+        { "properties": { "messageType": { "const": "cad.job.status.request" }, "payload": { "type": "object", "required": ["operationId"], "properties": { "operationId": { "$ref": "common.schema.json#/$defs/uuid" } }, "additionalProperties": false } } }
+      ]
+    },
+    "statusResponse": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/successResponseEnvelope" },
+        { "properties": { "messageType": { "const": "cad.job.status.response" }, "payload": { "type": "object", "required": ["operationId", "state"], "properties": { "operationId": { "$ref": "common.schema.json#/$defs/uuid" }, "state": { "enum": ["Accepted", "InProgress", "CancelPending", "Succeeded", "Failed", "Cancelled"] } }, "additionalProperties": false } } }
+      ]
+    },
+    "cancelRequest": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/requestEnvelope" },
+        { "properties": { "messageType": { "const": "cad.job.cancel.request" }, "payload": { "type": "object", "required": ["operationId"], "properties": { "operationId": { "$ref": "common.schema.json#/$defs/uuid" } }, "additionalProperties": false } } }
+      ]
+    },
+    "cancelResponse": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/successResponseEnvelope" },
+        { "properties": { "messageType": { "const": "cad.job.cancel.response" }, "status": { "enum": ["Accepted", "CancelPending", "Cancelled"] }, "payload": { "type": "object", "required": ["operationId"], "properties": { "operationId": { "$ref": "common.schema.json#/$defs/uuid" } }, "additionalProperties": false } } }
+      ]
+    },
+    "progressEvent": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/successResponseEnvelope" },
+        { "properties": { "messageType": { "const": "cad.event.progress" }, "status": { "const": "InProgress" }, "payload": { "type": "object", "required": ["operationId", "stage", "percent", "sequence"], "properties": { "operationId": { "$ref": "common.schema.json#/$defs/uuid" }, "stage": { "type": "string", "minLength": 1, "maxLength": 80 }, "percent": { "type": "integer", "minimum": 0, "maximum": 100 }, "sequence": { "type": "integer", "minimum": 0 } }, "additionalProperties": false } } }
+      ]
+    },
+    "failureResponse": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/failureResponseEnvelope" },
+        { "properties": { "messageType": { "enum": ["cad.capabilities.get.response", "cad.job.inspect.response", "cad.job.extract.response", "cad.job.validate.response", "cad.job.status.response", "cad.job.cancel.response"] } } }
+      ]
+    },
+    "unsupported": {
+      "type": "object",
+      "required": ["classification", "entityType", "count", "reasonCode"],
+      "properties": {
+        "classification": { "enum": ["PlannedEntity", "FieldBacked", "SharedBlockDefinition", "ExternalReference", "DerivedGeometry", "CustomObject", "Unknown"] },
+        "entityType": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "count": { "type": "integer", "minimum": 1 },
+        "reasonCode": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$" },
+        "originalClassification": { "type": "string", "maxLength": 120 }
+      },
+      "additionalProperties": false
+    },
+    "semanticNeighbor": {
+      "type": "object",
+      "required": ["segmentId", "sourceTextHash", "entityType", "relation", "distanceBand", "sameLayer"],
+      "properties": {
+        "segmentId": { "$ref": "common.schema.json#/$defs/segmentId" },
+        "sourceTextHash": { "$ref": "common.schema.json#/$defs/sha256" },
+        "entityType": { "enum": ["TEXT", "MTEXT"] },
+        "relation": { "enum": ["SamePosition", "Above", "Below", "Left", "Right"] },
+        "distanceBand": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "sameLayer": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "semanticContext": {
+      "type": "object",
+      "required": ["version", "contextHash", "semanticKey", "sheetRole", "discipline", "disciplineEvidence", "disciplineConflict", "anchorSource", "xBand", "yBand", "readingOrder", "signals", "neighborhoodDigest", "neighbors"],
+      "properties": {
+        "version": { "enum": ["cad-semantic-context/1.0", "cad-semantic-context/1.1", "cad-semantic-context/1.2"] },
+        "contextHash": { "$ref": "common.schema.json#/$defs/sha256" },
+        "semanticKey": { "$ref": "common.schema.json#/$defs/sha256" },
+        "sheetRole": { "enum": ["Model", "Sheet"] },
+        "discipline": { "enum": ["Unknown", "Architectural", "Mechanical", "Electrical", "Plumbing", "Fire", "Controls"] },
+        "disciplineEvidence": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^((LAYER|LAYOUT|BLOCK_PATH)_(ARCHITECTURAL|MECHANICAL|ELECTRICAL|PLUMBING|FIRE|CONTROLS)|DRAWING_NAME_CONTROLS)$" }
+        },
+        "disciplineConflict": { "type": "boolean" },
+        "disciplineResolution": { "enum": ["LOCAL_EVIDENCE_OVERRIDES_DRAWING_HINT", "DRAWING_NAME_ARCHITECTURAL_FALLBACK"] },
+        "anchorSource": { "enum": ["ExtentsCenter", "EntityPosition"] },
+        "xBand": { "type": "integer", "minimum": 0, "maximum": 15 },
+        "yBand": { "type": "integer", "minimum": 0, "maximum": 15 },
+        "readingOrder": { "type": "integer", "minimum": 0 },
+        "signals": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "enum": ["CEILING_CONTEXT", "RAISED_FLOOR_CONTEXT", "ROOF_CONTEXT", "VERTICAL_LEVEL_CONTEXT_CONFLICT"] }
+        },
+        "neighborhoodDigest": { "$ref": "common.schema.json#/$defs/sha256" },
+        "neighbors": { "type": "array", "maxItems": 4, "uniqueItems": true, "items": { "$ref": "#/$defs/semanticNeighbor" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "version": { "const": "cad-semantic-context/1.0" } }, "required": ["version"] },
+          "then": { "not": { "required": ["disciplineResolution"] } }
+        },
+        {
+          "if": {
+            "properties": { "disciplineResolution": { "const": "LOCAL_EVIDENCE_OVERRIDES_DRAWING_HINT" } },
+            "required": ["disciplineResolution"]
+          },
+          "then": {
+            "properties": {
+              "version": { "enum": ["cad-semantic-context/1.1", "cad-semantic-context/1.2"] },
+              "discipline": { "enum": ["Architectural", "Mechanical", "Electrical", "Plumbing", "Fire"] },
+              "disciplineConflict": { "const": false }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "disciplineResolution": { "const": "DRAWING_NAME_ARCHITECTURAL_FALLBACK" } },
+            "required": ["disciplineResolution"]
+          },
+          "then": {
+            "properties": {
+              "version": { "const": "cad-semantic-context/1.2" },
+              "discipline": { "const": "Architectural" },
+              "disciplineEvidence": { "maxItems": 0 },
+              "disciplineConflict": { "const": false }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "segment": {
+      "type": "object",
+      "required": ["segmentId", "entity", "sourceText", "sourceTextHash", "lineBreakStyle", "protectedTokens", "fieldClassification", "state"],
+      "properties": {
+        "segmentId": { "$ref": "common.schema.json#/$defs/segmentId" },
+        "entity": {
+          "type": "object",
+          "required": ["type", "handle", "space", "layout", "blockPath", "layer", "subIndex"],
+          "properties": {
+            "type": { "enum": ["TEXT", "MTEXT"] },
+            "handle": { "type": "string", "pattern": "^[0-9A-F]+$", "maxLength": 32 },
+            "space": { "enum": ["ModelSpace", "PaperSpace"] },
+            "layout": { "type": ["string", "null"], "maxLength": 255 },
+            "blockPath": { "type": "array", "maxItems": 0 },
+            "layer": { "type": "string", "minLength": 1, "maxLength": 255 },
+            "subIndex": { "const": 0 }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "space": { "const": "ModelSpace" } }, "required": ["space"] },
+              "then": { "properties": { "layout": { "type": "null" } } },
+              "else": { "properties": { "layout": { "type": "string", "minLength": 1 } } }
+            }
+          ],
+          "additionalProperties": false
+        },
+        "sourceText": { "type": "string", "maxLength": 65535 },
+        "sourceTextHash": { "$ref": "common.schema.json#/$defs/sha256" },
+        "lineBreakStyle": { "enum": ["None", "TextNewline", "MTextParagraph", "Mixed"] },
+        "protectedTokens": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/$defs/protectedToken" } },
+        "fieldClassification": { "const": "None" },
+        "state": { "const": "Extracted" },
+        "semanticContext": { "$ref": "#/$defs/semanticContext" }
+      },
+      "additionalProperties": false
+    },
+    "protectedToken": {
+      "type": "object",
+      "required": ["token", "kind", "ordinal"],
+      "properties": {
+        "token": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "kind": { "enum": ["Placeholder", "CadFormatControl", "FieldMarker", "NonTranslatable"] },
+        "ordinal": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "validation": {
+      "type": "object",
+      "required": ["reopenedByAutoCAD", "entityMappingValid", "geometryInvariantsValid", "formatTokenIntegrityValid", "policy"],
+      "properties": {
+        "reopenedByAutoCAD": { "const": true },
+        "entityMappingValid": { "const": true },
+        "geometryInvariantsValid": { "const": true },
+        "formatTokenIntegrityValid": { "const": true },
+        "policy": { "const": "MvpStrictV1" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

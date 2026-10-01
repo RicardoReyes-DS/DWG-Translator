@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "1.0.0",
+  "messageType": "cad.job.extract.response",
+  "jobId": "2a354ebb-26bc-4b8d-a31d-18a983f93d83",
+  "correlationId": "f99d8c5c-0f84-43a6-bbf4-f5a2d897051c",
+  "idempotencyKey": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "sentAtUtc": "2026-08-11T20:00:05Z",
+  "status": "Succeeded",
+  "payload": {
+    "sourceHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "segments": [
+      {
+        "segmentId": "seg_sha256_3a7ca53637585404b2f0c4793b1af59d3789e268dae46feb6344eb5384893353",
+        "entity": {
+          "type": "TEXT",
+          "handle": "A1B2",
+          "space": "ModelSpace",
+          "layout": null,
+          "blockPath": [],
+          "layer": "NOTES",
+          "subIndex": 0
+        },
+        "sourceText": "PUMP {TAG_01}",
+        "sourceTextHash": "sha256:d9281850f5cd986026891576eb115b2ed200f242df5ff691fd7c3fdde4d02564",
+        "lineBreakStyle": "None",
+        "protectedTokens": [{ "token": "{TAG_01}", "kind": "Placeholder", "ordinal": 0 }],
+        "fieldClassification": "None",
+        "state": "Extracted"
+      }
+    ],
+    "excludedFieldCount": 0
+  }
+}

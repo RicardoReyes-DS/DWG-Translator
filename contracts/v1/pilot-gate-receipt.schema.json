@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dwgtranslator.internal/contracts/v1/pilot-gate-receipt.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "gateId", "sourceRevision", "outcome", "producedAtUtc", "producer", "evidence", "facts"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "gateId": { "enum": ["code-signing", "installer-lifecycle", "cad-capabilities", "cad-e2e", "openai-smoke", "ux-signoff", "security-signoff"] },
+    "sourceRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "outcome": { "const": "pass" },
+    "producedAtUtc": { "type": "string", "format": "date-time", "pattern": "Z$" },
+    "producer": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "size", "sha256"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,234}\\.json$" },
+          "size": { "type": "integer", "minimum": 0, "maximum": 1048576 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "facts": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9]{0,39}$" },
+      "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 40 }
+    }
+  },
+  "additionalProperties": false
+}

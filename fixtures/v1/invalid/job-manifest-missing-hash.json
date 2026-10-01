@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0.0",
+  "jobId": "2a354ebb-26bc-4b8d-a31d-18a983f93d83",
+  "state": "Draft",
+  "version": 0,
+  "createdAtUtc": "2026-08-11T20:00:00Z",
+  "updatedAtUtc": "2026-08-11T20:00:00Z",
+  "source": { "path": "C:\\Drawings\\sample-input.dwg", "sizeBytes": 1 },
+  "output": { "requestedPath": "C:\\Drawings\\Output\\sample-input.es.dwg", "overwritePolicy": "FailIfExists" },
+  "translation": { "sourceLanguage": null, "targetLanguage": "es-MX", "adapter": "OpenAI", "model": "configured-model-id", "promptTemplateVersion": "translate-cad-text/1.0" },
+  "contractVersions": { "ipc": "1.0.0", "job": "1.0.0", "translation": "1.0.0" },
+  "counts": { "selected": 0, "approved": 0, "excluded": 0, "unsupported": 0, "errors": 0 },
+  "secretReference": "credential-manager:dwg-translator/openai"
+}

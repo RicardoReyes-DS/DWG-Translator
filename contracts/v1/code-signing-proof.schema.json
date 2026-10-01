@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dwgtranslator.internal/contracts/v1/code-signing-proof.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "product", "sourceRevision", "producedAtUtc", "signToolSha256", "artifacts"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "product": { "const": "DWG Translator" },
+    "sourceRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "producedAtUtc": { "type": "string", "format": "date-time", "pattern": "Z$" },
+    "signToolSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "artifacts": {
+      "type": "array", "minItems": 4, "maxItems": 128,
+      "items": {
+        "type": "object",
+        "required": ["path", "size", "sha256", "signerThumbprint", "timestampThumbprint"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^(app|Autodesk/ApplicationPlugins|installer)/[A-Za-z0-9][A-Za-z0-9._/-]{0,234}$" },
+          "size": { "type": "integer", "minimum": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "signerThumbprint": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+          "timestampThumbprint": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

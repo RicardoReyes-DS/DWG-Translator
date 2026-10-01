@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../DwgTranslator.Application/DwgTranslator.Application.csproj" />
+    <ProjectReference Include="../DwgTranslator.Contracts/DwgTranslator.Contracts.csproj" />
+    <ProjectReference Include="../DwgTranslator.Infrastructure.Local/DwgTranslator.Infrastructure.Local.csproj" />
+    <ProjectReference Include="../DwgTranslator.Infrastructure.Windows/DwgTranslator.Infrastructure.Windows.csproj" />
+    <ProjectReference Include="../DwgTranslator.Translation.OpenAI/DwgTranslator.Translation.OpenAI.csproj" />
+  </ItemGroup>
+</Project>

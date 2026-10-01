@@ -1,0 +1,339 @@
+<Window x:Class="DwgTranslator.Shell.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding Title}" Height="820" Width="1360" MinHeight="680" MinWidth="1040"
+        WindowStartupLocation="CenterScreen" Background="#F4F6F8" FontFamily="Segoe UI" Foreground="#17212B">
+    <Window.Resources>
+        <SolidColorBrush x:Key="PrimaryBrush" Color="#176B87" />
+        <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#12566D" />
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="16,8" />
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#CBD3DA" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonBorder" Property="Background" Value="#EAF2F5" /></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45" /></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="PrimaryButtonBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="PrimaryButtonBorder" Property="Background" Value="{StaticResource PrimaryHoverBrush}" /></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45" /></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="BorderBrush" Value="#CBD3DA" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="White" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="MinHeight" Value="34" />
+        </Style>
+        <Style x:Key="MetricCard" TargetType="Border">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#DCE2E7" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#102A36" Padding="26,18">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="DWG Translator" FontSize="26" FontWeight="SemiBold" Foreground="White" />
+                    <TextBlock Text="Traduce con AutoCAD, revisa cada propuesta y conserva intacto el plano original."
+                               Foreground="#C9D9E0" Margin="0,4,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                    <TextBlock Text="ETAPA ACTUAL" FontSize="10" FontWeight="Bold" Foreground="#8FB4C3" HorizontalAlignment="Right" />
+                    <TextBlock Text="{Binding CurrentStage}" FontSize="16" FontWeight="SemiBold" Foreground="White" HorizontalAlignment="Right" Margin="0,3,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Margin="22,18,22,12" Padding="18" Background="White" BorderBrush="#DCE2E7" BorderThickness="1" CornerRadius="8">
+            <Grid IsEnabled="{Binding CanConfigure}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="24" />
+                    <ColumnDefinition Width="220" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+
+                <TextBlock Text="Archivo DWG original" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,14,10" />
+                <TextBox Grid.Column="1" Text="{Binding SourceFile, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="True" Margin="0,0,8,10" />
+                <Button Grid.Column="2" Content="Seleccionar DWG…" Click="SelectSource_Click" Margin="0,0,0,10" />
+                <StackPanel Grid.Column="4" Grid.RowSpan="2">
+                    <TextBlock Text="Idioma de destino" FontWeight="SemiBold" Margin="0,0,0,6" />
+                    <ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}" DisplayMemberPath="DisplayName" />
+                    <TextBlock Text="{Binding TranslationReadinessSummary}" FontSize="11" Foreground="#40535F" TextWrapping="Wrap" Margin="0,7,0,0" />
+                </StackPanel>
+                <Button Grid.Column="5" Grid.RowSpan="2" Content="Extraer y traducir" Style="{StaticResource PrimaryButton}"
+                        IsEnabled="{Binding CanAttemptTranslation}" Click="StartTranslation_Click" Margin="16,22,0,0" VerticalAlignment="Top" Padding="20,10" />
+
+                <TextBlock Grid.Row="1" Text="Nueva copia" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,14,0" />
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding OutputFile, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="True" Margin="0,0,8,0" />
+                <Button Grid.Row="1" Grid.Column="2" Content="Elegir destino…" Click="SelectOutput_Click" />
+
+                <Expander Grid.Row="2" Grid.ColumnSpan="6" Header="Terminología del proyecto (opcional)" Margin="0,14,0,0"
+                          IsEnabled="{Binding CanEditGlossary}">
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <DataGrid x:Name="GlossaryGrid" ItemsSource="{Binding GlossaryEntries}" AutoGenerateColumns="False"
+                                  CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="Column" RowHeaderWidth="0"
+                                  MaxHeight="150" MinHeight="72" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E7EBEE">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Término original" Binding="{Binding Source, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                                <DataGridTextColumn Header="Traducción obligatoria" Binding="{Binding Target, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                                <DataGridCheckBoxColumn Header="Respetar mayúsculas" Binding="{Binding CaseSensitive, UpdateSourceTrigger=PropertyChanged}" Width="135" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                            <Button Content="Agregar término" Click="AddGlossary_Click" Margin="0,0,0,8" />
+                            <Button Content="Quitar selección" Click="RemoveGlossary_Click" />
+                        </StackPanel>
+                    </Grid>
+                </Expander>
+
+                <Expander Grid.Row="3" Grid.ColumnSpan="6" Header="Configuración de OpenAI" Margin="0,12,0,0" IsExpanded="True"
+                          IsEnabled="{Binding HasOpenAiSettings}">
+                    <Border Margin="0,10,0,0" Padding="14" Background="#F8FAFB" BorderBrush="#DCE2E7" BorderThickness="1" CornerRadius="6">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="210" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="18" />
+                                <ColumnDefinition Width="210" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Text="Modo de calidad" FontWeight="SemiBold" VerticalAlignment="Top" Margin="0,7,12,8" />
+                            <StackPanel Grid.Column="1" Margin="0,0,0,8">
+                                <ComboBox AutomationProperties.Name="Modo de calidad" ItemsSource="{Binding OpenAiRoutingModes}"
+                                          SelectedItem="{Binding SelectedRoutingMode}" DisplayMemberPath="DisplayName" />
+                                <TextBlock Text="{Binding RoutingBehaviorSummary}" TextWrapping="Wrap" Foreground="#60717C" FontSize="11" Margin="0,4,0,0" />
+                                <TextBlock Text="{Binding EffectiveModelSummary}" TextWrapping="Wrap" Foreground="#40535F" FontSize="11" Margin="0,3,0,0" />
+                                <TextBlock Text="{Binding OpenAiTierAccessSummary}" TextWrapping="Wrap" Foreground="#40535F" FontSize="11" Margin="0,3,0,0" />
+                                <TextBlock Text="{Binding EscalatedSegmentCount, StringFormat=Segmentos escalados: {0}}" Foreground="#40535F" FontSize="11" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Row="1" Text="Modelo manual" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,8" />
+                            <Grid Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <ComboBox AutomationProperties.Name="Modelo manual exacto" IsEditable="True" ItemsSource="{Binding OpenAiModelOptions}"
+                                          Text="{Binding SelectedOpenAiModel, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Grid.Column="1" Content="Actualizar lista" IsEnabled="{Binding CanDiscoverOpenAiModels}"
+                                        Click="DiscoverOpenAiModels_Click" Margin="8,0,0,0" Padding="10,6" />
+                            </Grid>
+
+                            <TextBlock Grid.Column="3" Text="API key" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,8" />
+                            <PasswordBox x:Name="OpenAiApiKeyBox" Grid.Column="4" Padding="10,7" Margin="0,0,8,8"
+                                         ToolTip="La clave se guarda únicamente en Windows Credential Manager." />
+                            <Button Grid.Column="5" Content="Guardar clave" IsEnabled="{Binding CanManageOpenAiSettings}"
+                                    Click="SaveOpenAiSettings_Click" Margin="0,0,0,8" />
+
+                            <TextBlock Grid.Row="2" Text="Confirmar API key" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,8" />
+                            <PasswordBox x:Name="OpenAiApiKeyConfirmationBox" Grid.Row="2" Grid.Column="1" Padding="10,7" Margin="0,0,0,8" />
+                            <TextBlock Grid.Row="2" Grid.Column="3" Text="Estado" FontWeight="SemiBold" VerticalAlignment="Top" Margin="0,7,12,8" />
+                            <TextBlock Grid.Row="2" Grid.Column="4" Text="{Binding OpenAiCredentialStatus}" TextWrapping="Wrap"
+                                       Foreground="#40535F" Margin="0,7,8,8" />
+                            <Button Grid.Row="2" Grid.Column="5" Content="Probar conexión" IsEnabled="{Binding CanTestOpenAiConnection}"
+                                    Click="TestOpenAiConnection_Click" Margin="0,0,0,8" />
+
+                            <TextBlock Grid.Row="3" Grid.ColumnSpan="4" Text="{Binding OpenAiLimitsSummary}" TextWrapping="Wrap" Foreground="#60717C" />
+                            <CheckBox Grid.Row="3" Grid.Column="4" Grid.ColumnSpan="2" IsChecked="{Binding OpenAiUsageConfirmed}"
+                                      IsEnabled="{Binding OpenAiCredentialReady}" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <TextBlock Text="Autorizo usar la API de OpenAI para este trabajo." TextWrapping="Wrap" />
+                            </CheckBox>
+                        </Grid>
+                    </Border>
+                </Expander>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2" Margin="22,0,22,12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal">
+                <Border Style="{StaticResource MetricCard}"><StackPanel><TextBlock Text="TOTAL" FontSize="10" FontWeight="Bold" Foreground="#60717C" /><TextBlock Text="{Binding TotalCount}" FontSize="20" FontWeight="SemiBold" /></StackPanel></Border>
+                <Border Style="{StaticResource MetricCard}"><StackPanel><TextBlock Text="PENDIENTES" FontSize="10" FontWeight="Bold" Foreground="#A05A13" /><TextBlock Text="{Binding PendingCount}" FontSize="20" FontWeight="SemiBold" /></StackPanel></Border>
+                <Border Style="{StaticResource MetricCard}"><StackPanel><TextBlock Text="APROBADOS" FontSize="10" FontWeight="Bold" Foreground="#287A4D" /><TextBlock Text="{Binding ApprovedCount}" FontSize="20" FontWeight="SemiBold" /></StackPanel></Border>
+                <Border Style="{StaticResource MetricCard}"><StackPanel><TextBlock Text="EXCLUIDOS" FontSize="10" FontWeight="Bold" Foreground="#60717C" /><TextBlock Text="{Binding ExcludedCount}" FontSize="20" FontWeight="SemiBold" /></StackPanel></Border>
+                <Border Style="{StaticResource MetricCard}"><StackPanel><TextBlock Text="ADVERTENCIAS" FontSize="10" FontWeight="Bold" Foreground="#A33333" /><TextBlock Text="{Binding WarningCount}" FontSize="20" FontWeight="SemiBold" /></StackPanel></Border>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBox Width="230" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="Buscar en original, traducción o ubicación" />
+                <ComboBox Width="150" Margin="8,0,0,0" ItemsSource="{Binding ReviewFilters}" SelectedItem="{Binding SelectedReviewFilter}" DisplayMemberPath="DisplayName" />
+            </StackPanel>
+        </Grid>
+
+        <TabControl Grid.Row="3" Margin="22,0,22,0" SelectedIndex="{Binding SelectedResultsTab}" Background="White" BorderBrush="#DCE2E7">
+            <TabItem Header="Revisión de traducción">
+                <DataGrid x:Name="ReviewGrid" ItemsSource="{Binding ReviewView}" AutoGenerateColumns="False" CanUserAddRows="False"
+                          CanUserDeleteRows="False" SelectionMode="Extended" SelectionUnit="FullRow" RowHeaderWidth="0"
+                          HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E7EBEE"
+                          AlternatingRowBackground="#F8FAFB" BorderThickness="0" RowHeight="54" ColumnHeaderHeight="38"
+                          FrozenColumnCount="1" EnableRowVirtualization="True">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Original" Binding="{Binding OriginalText}" IsReadOnly="True" Width="2*" />
+                        <DataGridTextColumn Header="Propuesta IA" Binding="{Binding ProposedText}" IsReadOnly="True" Width="2*" />
+                        <DataGridTextColumn Header="Texto final editable" Binding="{Binding FinalText, UpdateSourceTrigger=PropertyChanged}" Width="2.3*" />
+                        <DataGridTextColumn Header="Ubicación" Binding="{Binding Context}" IsReadOnly="True" Width="1.4*" />
+                        <DataGridTextColumn Header="Estado" Binding="{Binding State}" IsReadOnly="True" Width="110" />
+                        <DataGridTextColumn Header="Advertencia" Binding="{Binding Warning}" IsReadOnly="True" Width="130" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+            <TabItem Header="Validación automática">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <Border Background="#FFF7E6" BorderBrush="#E5C477" BorderThickness="0,0,0,1" Padding="14,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="PASS automático confirma propiedades y geometría. La aprobación final requiere revisar visualmente la copia en AutoCAD." Foreground="#704B00" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding VisualReviewSummary}" FontWeight="SemiBold" Foreground="#704B00" Margin="0,5,0,0" />
+                                <TextBlock Text="{Binding QualitySummary}" Foreground="#704B00" TextWrapping="Wrap" Margin="0,5,0,0" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0">
+                                <Button Content="Abrir copia en AutoCAD" IsEnabled="{Binding CanOpenVisualReview}" Click="OpenVisualReview_Click" Margin="0,0,8,0" />
+                                <Button Content="Registrar PASS visual" IsEnabled="{Binding CanRecordVisualReview}" Click="PassVisualReview_Click" Margin="0,0,8,0" />
+                                <Button Content="Registrar FAIL visual" IsEnabled="{Binding CanRecordVisualReview}" Click="FailVisualReview_Click" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <DataGrid Grid.Row="1" ItemsSource="{Binding ValidationRows}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                              IsReadOnly="True" RowHeaderWidth="0" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                              HorizontalGridLinesBrush="#E7EBEE" AlternatingRowBackground="#F8FAFB" BorderThickness="0" RowHeight="46" ColumnHeaderHeight="38">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Entidad" Binding="{Binding Handle}" Width="110" />
+                            <DataGridTextColumn Header="Tipo" Binding="{Binding EntityType}" Width="90" />
+                            <DataGridTextColumn Header="Ubicación" Binding="{Binding Location}" Width="1.5*" />
+                            <DataGridTextColumn Header="Propiedades preservadas" Binding="{Binding PreservedProperties}" Width="170" />
+                            <DataGridTextColumn Header="Límites visibles" Binding="{Binding BoundsStatus}" Width="160" />
+                            <DataGridTextColumn Header="Resultado" Binding="{Binding Result}" Width="2*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+            <TabItem Header="Trabajos y recuperación" IsEnabled="{Binding HasJobAdministration}">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <Border Background="#F8FAFB" BorderBrush="#DCE2E7" BorderThickness="0,0,0,1" Padding="14,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Recupera revisiones o escrituras desde checkpoints seguros. Los candidatos ambiguos nunca se reemplazan automáticamente."
+                                           Foreground="#40535F" TextWrapping="Wrap" />
+                                <TextBlock Text="La retención solo elimina datos locales terminales y expirados; cualquier carpeta que contenga un DWG queda protegida."
+                                           Foreground="#60717C" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0">
+                                <Button Content="Actualizar" IsEnabled="{Binding CanRefreshJobs}" Click="RefreshJobs_Click" Margin="0,0,8,0" />
+                                <Button Content="Recuperar seleccionado" IsEnabled="{Binding CanResumeSelectedJob}" Click="ResumeJob_Click" Margin="0,0,16,0" />
+                                <TextBlock Text="Conservar días:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <ComboBox Width="72" ItemsSource="{Binding RetentionOptions}" SelectedItem="{Binding RetentionDays}" Margin="0,0,8,0" />
+                                <Button Content="Limpiar expirados…" IsEnabled="{Binding CanRefreshJobs}" Click="DeleteExpiredJobs_Click" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <DataGrid Grid.Row="1" ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}" AutoGenerateColumns="False"
+                              CanUserAddRows="False" CanUserDeleteRows="False" IsReadOnly="True" RowHeaderWidth="0"
+                              HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#E7EBEE"
+                              AlternatingRowBackground="#F8FAFB" BorderThickness="0" RowHeight="46" ColumnHeaderHeight="38">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Actualizado" Binding="{Binding UpdatedAtUtc, StringFormat={}{0:yyyy-MM-dd HH:mm}}" Width="145" />
+                            <DataGridTextColumn Header="Estado" Binding="{Binding State}" Width="120" />
+                            <DataGridTextColumn Header="Error" Binding="{Binding FailureCode}" Width="190" />
+                            <DataGridTextColumn Header="Origen" Binding="{Binding SourcePath}" Width="2*" />
+                            <DataGridTextColumn Header="Destino" Binding="{Binding OutputPath}" Width="2*" />
+                            <DataGridCheckBoxColumn Header="Recuperable" Binding="{Binding CanResume}" Width="100" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <Border Grid.Row="4" Margin="22,12,22,18" Padding="16,12" Background="White" BorderBrush="#DCE2E7" BorderThickness="1" CornerRadius="8">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <ProgressBar Height="9" Minimum="0" Maximum="100" Value="{Binding ProgressValue, Mode=OneWay}"
+                                 IsIndeterminate="{Binding ProgressIsIndeterminate, Mode=OneWay}" Margin="0,0,24,8" />
+                    <TextBlock Text="{Binding ProgressDetail}" Foreground="#176B87" FontWeight="SemiBold"
+                               TextWrapping="Wrap" Margin="0,0,24,6" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding ProgressSummary}" FontWeight="SemiBold" />
+                        <TextBlock Text=" · " Foreground="#87949D" />
+                        <TextBlock Text="{Binding CoverageSummary}" Foreground="#60717C" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding Status}" Foreground="#40535F" TextWrapping="Wrap" Margin="0,4,24,0" />
+                    <TextBlock Text="{Binding GenerationReadinessSummary}" Foreground="#A05A13" FontWeight="SemiBold"
+                               TextWrapping="Wrap" Margin="0,4,24,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Restaurar propuesta" IsEnabled="{Binding CanReview}" Click="RestoreProposal_Click" Margin="0,0,8,0" />
+                    <Button Content="Aprobar selección" IsEnabled="{Binding CanReview}" Click="ApproveSelected_Click" Margin="0,0,8,0" />
+                    <Button Content="Aprobar visibles" IsEnabled="{Binding CanReview}" Click="ApproveVisible_Click" Margin="0,0,12,0" />
+                    <ComboBox Width="165" ItemsSource="{Binding ExclusionReasons}" SelectedItem="{Binding SelectedExclusionReason}" Margin="0,0,8,0" />
+                    <Button Content="Excluir selección" IsEnabled="{Binding CanReview}" Click="ExcludeSelected_Click" Margin="0,0,12,0" />
+                    <Button Content="Cancelar" IsEnabled="{Binding CanCancel}" Click="CancelOperation_Click" Margin="0,0,8,0" />
+                    <Button Content="Nuevo trabajo" IsEnabled="{Binding CanReset}" Click="Reset_Click" Margin="0,0,8,0" />
+                    <Button Content="Generar copia DWG" Style="{StaticResource PrimaryButton}" IsEnabled="{Binding CanGenerate}"
+                            ToolTip="La escritura solo comienza después de aprobar o excluir todos los segmentos."
+                            Click="Generate_Click" Padding="20,9" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

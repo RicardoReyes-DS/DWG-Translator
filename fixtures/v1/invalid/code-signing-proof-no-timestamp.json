@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0.0",
+  "product": "DWG Translator",
+  "sourceRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "producedAtUtc": "2026-08-13T20:00:00Z",
+  "signToolSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "artifacts": [
+    { "path": "app/DwgTranslator.Shell.exe", "size": 100, "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "signerThumbprint": "2222222222222222222222222222222222222222", "timestampThumbprint": null }
+  ]
+}
