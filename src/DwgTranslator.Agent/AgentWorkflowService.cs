@@ -667,7 +667,8 @@ public sealed class AgentWorkflowService
         if (replay is not null) return replay;
         var job = await _backend.LoadJobAsync(request.JobId, cancellationToken).ConfigureAwait(false);
         if (!job.IsSuccess) return Failure(command, job.Error!);
-        if (job.Value!.State != JobState.ReviewRequired || job.Value.Version != request.ExpectedJobVersion)
+        if (job.Value!.Version != request.ExpectedJobVersion ||
+            job.Value.State != (request.ReviseApproved ? JobState.Approved : JobState.ReviewRequired))
             return Failure(command, "JOB_STATE_CONFLICT", "The job state or version changed before review was applied.");
         var review = await _backend.LoadReviewAsync(request.JobId, cancellationToken).ConfigureAwait(false);
         if (!review.IsSuccess) return Failure(command, review.Error!);
@@ -678,14 +679,23 @@ public sealed class AgentWorkflowService
         if (reviewBinding is not null) return Failure(command, reviewBinding);
         var decisions = BuildReviewDecisions(request, review.Value!, data.Data!.Segments!);
         if (decisions.Error is not null) return Failure(command, decisions.Error);
+        if (request.ReviseApproved)
+        {
+            var correctionGate = ValidateApprovedReviewCorrection(job.Value, review.Value!, data.Data,
+                decisions.Decisions!, request.AutomationAuthority);
+            if (correctionGate is not null) return Failure(command, correctionGate);
+        }
         if (data.Data.ApprovedContextRevalidationReceipt is { } contextMarker &&
             !HistoricalIncidentRecoveryPolicy.ValidFreshReviewDecisionSet(request.JobId,
                 Path.GetFileName(data.Data.Specification.SourcePath), contextMarker,
                 review.Value!, decisions.Decisions!, request.AutomationAuthority))
             return Failure(command, "RECOVERY_CONTEXT_REVIEW_DECISION_SET_INVALID",
                 "The fresh context review has no authorized historical decision binding.");
-        var approved = await _backend.ApproveAsync(request.JobId, decisions.Decisions!, review.Value!.Version, request.AutomationAuthority,
-            cancellationToken).ConfigureAwait(false);
+        var approved = request.ReviseApproved
+            ? await _backend.ReviseApprovedReviewAsync(request.JobId, request.ExpectedJobVersion,
+                decisions.Decisions!, review.Value!.Version, request.AutomationAuthority!, cancellationToken).ConfigureAwait(false)
+            : await _backend.ApproveAsync(request.JobId, decisions.Decisions!, review.Value!.Version,
+                request.AutomationAuthority, cancellationToken).ConfigureAwait(false);
         if (!approved.IsSuccess) return Failure(command, approved.Error!);
         var response = new JsonObject
         {
@@ -698,10 +708,82 @@ public sealed class AgentWorkflowService
             ["reviewVersion"] = review.Value!.Version + 1,
             ["contextHash"] = review.Value.ContextHash,
             ["automationAuthorityPersisted"] = request.AutomationAuthority is not null,
+            ["revisedApproved"] = request.ReviseApproved,
             ["nextTool"] = "dwg_generation_plan"
         };
         await _files.CompleteIdempotencyAsync(request.IdempotencyKey, response, cancellationToken).ConfigureAwait(false);
         return Success(command, response);
+    }
+
+    private AgentError? ValidateApprovedReviewCorrection(JobDocument job, TranslationReviewSnapshot review,
+        DwgTranslationJobData data, IReadOnlyList<ReviewDecisionInput> decisions,
+        ReviewAutomationReceipt? authority)
+    {
+        var scope = data.Specification.ReviewAutomationScope;
+        var prior = review.ReviewAutomationReceipt;
+        if (scope is null || prior is null || authority is null ||
+            authority.ReviewerReportHash == prior.ReviewerReportHash ||
+            authority.QaReportHash == prior.QaReportHash ||
+            prior.BatchId != scope.BatchId || prior.ManifestHash != scope.ManifestHash ||
+            prior.ContextHash != review.ContextHash || data.OutputHash is not null ||
+            _cadProcessExists() || decisions.Count != review.Rows.Count ||
+            review.Rows.Any(row => row.State != SegmentState.Approved || row.FinalText is null))
+            return new("APPROVED_REVIEW_CORRECTION_NOT_ALLOWED",
+                "The approved review or its replacement authority is not eligible for prewrite correction.");
+
+        AgentBatchDocument? batch;
+        try
+        {
+            var path = Path.Combine(_configuration.WorkspaceRoot, "batches", scope.BatchId.ToString("D"), "batch.json");
+            batch = File.Exists(path) ? JsonSerializer.Deserialize<AgentBatchDocument>(File.ReadAllText(path), Json) : null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return new("APPROVED_REVIEW_BATCH_EVIDENCE_UNAVAILABLE",
+                "The failed batch evidence cannot be read.");
+        }
+        var file = batch?.Files?.SingleOrDefault(candidate => candidate.JobId == job.JobId);
+        if (batch is null || batch.State != "CompletedWithFailures" ||
+            batch.BatchId != scope.BatchId || batch.ManifestHash != scope.ManifestHash ||
+            file is null || file.State != AgentBatchFileState.Failed ||
+            file.ErrorCode != "BATCH_HUMAN_REVIEW_REQUIRED" ||
+            file.ReviewGateCode != "REVIEW_INVARIANT_FAILED" ||
+            file.JobVersion != job.Version || file.ReviewVersion != review.Version ||
+            file.GenerateOperationId is not null || file.OutputHash is not null ||
+            file.SourceHash != data.Specification.SourceHash ||
+            !SameAbsolutePath(file.OutputPath, data.Specification.OutputPath) ||
+            File.Exists(file.OutputPath) || Directory.Exists(file.OutputPath))
+            return new("APPROVED_REVIEW_BATCH_EVIDENCE_INVALID",
+                "The exact failed prewrite batch file or absent output cannot be proven.");
+
+        var revised = decisions.Where((decision, index) =>
+            !string.Equals(decision.FinalText, review.Rows[index].FinalText, StringComparison.Ordinal) ||
+            decision.ExclusionReason is not null).ToArray();
+        if (revised.Length != 1 || revised[0].ExclusionReason is not null ||
+            data.Segments is null)
+            return new("APPROVED_REVIEW_CORRECTION_SCOPE_INVALID",
+                "Exactly one approved final text must change in this correction.");
+        var segment = data.Segments.SingleOrDefault(item => item.SegmentId == revised[0].SegmentId);
+        if (segment is null || revised[0].FinalText is null ||
+            ArchitecturalMepTerminologyPolicy.Validate(segment.SourceText, revised[0].FinalText!,
+                Array.Empty<TerminologyMatch>()).Count != 0)
+            return new("APPROVED_REVIEW_CORRECTION_INVARIANT_FAILED",
+                "The corrected text failed numeric, CAD token, or terminology invariants.");
+        return null;
+    }
+
+    private static bool SameAbsolutePath(string left, string right)
+    {
+        try
+        {
+            return Path.IsPathFullyQualified(left) && Path.IsPathFullyQualified(right) &&
+                string.Equals(Path.GetFullPath(left), Path.GetFullPath(right),
+                    StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

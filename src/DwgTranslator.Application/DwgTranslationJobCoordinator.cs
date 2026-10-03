@@ -496,6 +496,99 @@ public sealed class DwgTranslationJobCoordinator
     public Task<Result<JobDocument>> GenerateAsync(Guid jobId, CancellationToken cancellationToken) =>
         GenerateAsync(jobId, null, cancellationToken);
 
+    public async Task<Result<JobDocument>> ReviseApprovedReviewAsync(Guid jobId, long expectedJobVersion,
+        IReadOnlyList<ReviewDecisionInput> decisions, long expectedReviewVersion,
+        ReviewAutomationReceipt authority, CancellationToken cancellationToken)
+    {
+        var loaded = await LoadInStateAsync(jobId, JobState.Approved, cancellationToken);
+        if (!loaded.IsSuccess) return loaded;
+        var job = loaded.Value!;
+        if (job.Version != expectedJobVersion)
+            return Failure("JOB_STATE_CONFLICT", ErrorCategory.Concurrency,
+                "The approved job changed before correction.");
+        var parsed = Deserialize(job.Data);
+        if (!parsed.IsSuccess || parsed.Value!.Segments is not { Count: > 0 } segments)
+            return Results.Failure<JobDocument>(parsed.Error ?? Error("JOB_SEGMENTS_MISSING",
+                ErrorCategory.Storage, "Extracted segments are missing."));
+        var reviewResult = await _reviews.LoadAsync(jobId, cancellationToken);
+        if (!reviewResult.IsSuccess) return Results.Failure<JobDocument>(reviewResult.Error!);
+        var review = reviewResult.Value!;
+        if (review.Version != expectedReviewVersion || review.Rows.Count != segments.Count ||
+            review.ReviewAutomationReceipt is null ||
+            review.Rows.Any(row => row.State != SegmentState.Approved || row.FinalText is null) ||
+            !ValidAutomationAuthority(authority, review, parsed.Value.Specification.ReviewAutomationScope, segments) ||
+            authority.ReviewerReportHash == review.ReviewAutomationReceipt.ReviewerReportHash ||
+            authority.QaReportHash == review.ReviewAutomationReceipt.QaReportHash ||
+            decisions.Count != review.Rows.Count ||
+            decisions.Select(item => item.SegmentId).Distinct(StringComparer.Ordinal).Count() != decisions.Count)
+            return Failure("APPROVED_REVIEW_CORRECTION_BINDING_INVALID", ErrorCategory.Integrity,
+                "The approved review, new authority, or complete decision set changed.");
+
+        var byId = decisions.ToDictionary(item => item.SegmentId, StringComparer.Ordinal);
+        var segmentsById = segments.ToDictionary(item => item.SegmentId, StringComparer.Ordinal);
+        var changed = 0;
+        var rows = new List<ReviewRowSnapshot>(review.Rows.Count);
+        foreach (var row in review.Rows)
+        {
+            if (!byId.TryGetValue(row.SegmentId, out var decision) ||
+                !segmentsById.TryGetValue(row.SegmentId, out var segment) ||
+                decision.ExclusionReason is not null || string.IsNullOrEmpty(decision.FinalText))
+                return Failure("APPROVED_REVIEW_CORRECTION_SCOPE_INVALID", ErrorCategory.Input,
+                    "The correction must retain every approved segment and change one final text.");
+            var approved = HumanReviewPolicy.Approve(segment,
+                new AcceptedTranslation(row.SegmentId, row.ProposedText), decision.FinalText);
+            if (!approved.IsSuccess) return Results.Failure<JobDocument>(approved.Error!);
+            if (!string.Equals(row.FinalText, decision.FinalText, StringComparison.Ordinal))
+            {
+                changed++;
+                if (ArchitecturalMepTerminologyPolicy.Validate(segment.SourceText,
+                    decision.FinalText, Array.Empty<TerminologyMatch>()).Count != 0)
+                    return Failure("APPROVED_REVIEW_CORRECTION_INVARIANT_FAILED", ErrorCategory.Integrity,
+                        "The changed final text failed a prewrite invariant.");
+            }
+            rows.Add(row with { State = SegmentState.Approved, FinalText = decision.FinalText,
+                ExclusionReason = null });
+        }
+        if (changed != 1)
+            return Failure("APPROVED_REVIEW_CORRECTION_SCOPE_INVALID", ErrorCategory.Input,
+                "Exactly one final text must change in this correction.");
+
+        var revised = review with
+        {
+            Version = review.Version + 1,
+            UpdatedAtUtc = _clock.UtcNow,
+            Rows = rows,
+            ReviewAutomationReceipt = authority
+        };
+        var reboundData = BindCurrentReview(parsed.Value, TranslationReviewFingerprint.Create(revised));
+        if (!reboundData.IsSuccess) return Results.Failure<JobDocument>(reboundData.Error!);
+        var savedReview = await _reviews.SaveAsync(revised, review.Version, cancellationToken);
+        if (!savedReview.IsSuccess) return Results.Failure<JobDocument>(savedReview.Error!);
+        var updated = job with
+        {
+            Version = job.Version + 1,
+            UpdatedAtUtc = _clock.UtcNow,
+            Data = Serialize(reboundData.Value!)
+        };
+        var savedJob = await _jobs.SaveAsync(updated, job.Version, cancellationToken);
+        if (!savedJob.IsSuccess) return savedJob;
+        var before = TranslationReviewFingerprint.Create(review);
+        var after = TranslationReviewFingerprint.Create(revised);
+        var audit = await _jobs.AppendAuditAsync(new AuditRecord(Guid.NewGuid(), jobId, Guid.NewGuid(),
+            _clock.UtcNow, "ApprovedReviewCorrected", new JsonObject
+            {
+                ["jobVersion"] = updated.Version,
+                ["reviewVersion"] = revised.Version,
+                ["previousReviewHash"] = before.ReviewHash,
+                ["newReviewHash"] = after.ReviewHash,
+                ["newReceiptHash"] = after.ReceiptHash,
+                ["changedSegments"] = 1
+            }), cancellationToken);
+        if (!audit.IsSuccess) return Results.Failure<JobDocument>(audit.Error!);
+        return await CheckpointAsync(savedJob.Value!, reboundData.Value!, cancellationToken,
+            reviewSeal: reboundData.Value!.RecoveryReviewScopeSeal);
+    }
+
     public async Task<Result<JobDocument>> GenerateAsync(
         Guid jobId,
         TranslationReviewFingerprint? expectedReview,

@@ -88,6 +88,12 @@ public sealed class AgentTranslationWorkflowBackend(
         ReviewAutomationReceipt? automationAuthority,
         CancellationToken cancellationToken) => coordinator.ApproveAsync(jobId, decisions, expectedReviewVersion, automationAuthority, cancellationToken);
 
+    public Task<Result<JobDocument>> ReviseApprovedReviewAsync(Guid jobId, long expectedJobVersion,
+        IReadOnlyList<ReviewDecisionInput> decisions, long expectedReviewVersion,
+        ReviewAutomationReceipt automationAuthority, CancellationToken cancellationToken) =>
+        coordinator.ReviseApprovedReviewAsync(jobId, expectedJobVersion, decisions,
+            expectedReviewVersion, automationAuthority, cancellationToken);
+
     /// <summary>
     /// Restores only a failed, recoverable generation to the exact durable
     /// Approved checkpoint.  This does not invoke the coordinator: therefore it

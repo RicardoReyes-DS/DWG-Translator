@@ -63,6 +63,57 @@ public sealed class CadSemanticContextTests
     }
 
     [TestMethod]
+    public void VersionOneThreeUsesUniqueManifestTokensAndPreservesStructuralLocalEvidence()
+    {
+        var electrical = Input('a', "E1", 0, 0, drawingHint: "SYNTHETIC-ELE-01.dwg");
+        var structural = Input('b', "E2", 1, 0, drawingHint: "SYNTHETIC-EST-01.dwg");
+        var local = Input('c', "E3", 2, 0, layer: "STRUCTURAL-REBAR", drawingHint: "SYNTHETIC-ELE-02.dwg");
+        var result = CadSemanticContextBuilder.Build([electrical, structural, local],
+            CadSemanticContextBuilder.PolicyVersionOneThree);
+
+        Assert.IsTrue(result.IsSuccess, result.Error?.Code);
+        Assert.AreEqual("Electrical", result.Value![electrical.SegmentId].Discipline);
+        Assert.AreEqual(CadSemanticContextBuilder.DrawingNameElectricalFallback,
+            result.Value[electrical.SegmentId].DisciplineResolution);
+        Assert.AreEqual("Structural", result.Value[structural.SegmentId].Discipline);
+        Assert.AreEqual(CadSemanticContextBuilder.DrawingNameStructuralFallback,
+            result.Value[structural.SegmentId].DisciplineResolution);
+        Assert.AreEqual("Structural", result.Value[local.SegmentId].Discipline);
+        CollectionAssert.Contains(result.Value[local.SegmentId].DisciplineEvidence, "LAYER_STRUCTURAL");
+        Assert.IsNull(result.Value[local.SegmentId].DisciplineResolution);
+        Assert.IsTrue(CadSemanticContextBuilder.AggregateHash(Segments([electrical, structural, local], result.Value)).IsSuccess);
+        Assert.IsFalse(JsonSerializer.Serialize(result.Value).Contains("SYNTHETIC", StringComparison.Ordinal));
+
+        var previous = CadSemanticContextBuilder.Build([local], CadSemanticContextBuilder.PolicyVersionOneTwo);
+        Assert.IsTrue(previous.IsSuccess, previous.Error?.Code);
+        Assert.AreEqual("Unknown", previous.Value![local.SegmentId].Discipline);
+    }
+
+    [TestMethod]
+    public void VersionOneThreeRejectsConflictingFilenameTokensAndForgedFallback()
+    {
+        var conflict = Input('a', "F1", 0, 0, drawingHint: "SYNTHETIC-ELE-EST.dwg");
+        var rejected = CadSemanticContextBuilder.Build([conflict], CadSemanticContextBuilder.PolicyVersionOneThree);
+        Assert.AreEqual("CAD_SEMANTIC_CONTEXT_INPUT_INVALID", rejected.Error?.Code);
+        var controlsConflict = Input('c', "F3", 1, 0, drawingHint: "SYNTHETIC-ELE-BMS.dwg");
+        var controlsRejected = CadSemanticContextBuilder.Build([controlsConflict],
+            CadSemanticContextBuilder.PolicyVersionOneThree);
+        Assert.AreEqual("CAD_SEMANTIC_CONTEXT_INPUT_INVALID", controlsRejected.Error?.Code);
+
+        var input = Input('b', "F2", 0, 0, drawingHint: "SYNTHETIC-EST-01.dwg");
+        var built = CadSemanticContextBuilder.Build([input], CadSemanticContextBuilder.PolicyVersionOneThree);
+        Assert.IsTrue(built.IsSuccess, built.Error?.Code);
+        var segment = Segment(input, built.Value![input.SegmentId]);
+        var forged = segment with { SemanticContext = segment.SemanticContext! with
+        {
+            Discipline = "Electrical",
+            DisciplineResolution = CadSemanticContextBuilder.DrawingNameElectricalFallback
+        } };
+        Assert.AreEqual("CAD_SEMANTIC_CONTEXT_SET_INVALID",
+            CadSemanticContextBuilder.AggregateHash([forged]).Error?.Code);
+    }
+
+    [TestMethod]
     public void NeighborSignalsAreDeterministicButNeighborTextIsNotInCadContract()
     {
         var origin = Input('a', "C1", 0, 0, sourceText: "LEVEL");

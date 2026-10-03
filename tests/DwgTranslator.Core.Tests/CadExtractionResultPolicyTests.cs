@@ -221,6 +221,64 @@ public sealed class CadExtractionResultPolicyTests
         Assert.IsTrue(manifestBoundArq.IsSuccess, manifestBoundArq.Error?.Code);
     }
 
+    [TestMethod]
+    [DataRow("ELE", "Electrical", CadSemanticContextBuilder.DrawingNameElectricalFallback)]
+    [DataRow("EST", "Structural", CadSemanticContextBuilder.DrawingNameStructuralFallback)]
+    public void VersionOneThreeDisciplineFallbackRequiresTheExactManifestToken(
+        string token, string discipline, string resolution)
+    {
+        var response = LoadFixture();
+        var segmentNode = Segment(response);
+        segmentNode["entity"]!["layer"] = "0";
+        UpdateIdentity(segmentNode);
+        var basename = $"SYNTHETIC-{token}-001.dwg";
+        var legacy = CadExtractionResultPolicy.Validate(response, TestData.HashA, TestData.HashB, basename);
+        Assert.IsTrue(legacy.IsSuccess, legacy.Error?.Code);
+        var segment = legacy.Value!.Single();
+        var built = CadSemanticContextBuilder.Build(
+            [new CadSemanticContextInput(segment.SegmentId, segment.Entity.Type, segment.Entity.Handle,
+                segment.Entity.Space, segment.Entity.Layout, segment.Entity.BlockPath,
+                segment.Entity.Layer, segment.SourceText, segment.SourceTextHash,
+                10, 20, 2.5, "ExtentsCenter", basename)],
+            CadSemanticContextBuilder.PolicyVersionOneThree);
+        Assert.IsTrue(built.IsSuccess, built.Error?.Code);
+        var context = built.Value![segment.SegmentId];
+        Assert.AreEqual(discipline, context.Discipline);
+        Assert.AreEqual(resolution, context.DisciplineResolution);
+        segmentNode["semanticContext"] = JsonSerializer.SerializeToNode(context, WebJson);
+
+        var wrong = CadExtractionResultPolicy.Validate(response, TestData.HashA, TestData.HashB,
+            token == "ELE" ? "SYNTHETIC-EST-001.dwg" : "SYNTHETIC-ELE-001.dwg");
+        Assert.AreEqual("CAD_SEMANTIC_CONTEXT_MANIFEST_BINDING_MISMATCH", wrong.Error?.Code);
+        var right = CadExtractionResultPolicy.Validate(response, TestData.HashA, TestData.HashB, basename);
+        Assert.IsTrue(right.IsSuccess, right.Error?.Code);
+    }
+
+    [TestMethod]
+    public void VersionOneThreeRejectsOmittingAnUnambiguousManifestDiscipline()
+    {
+        var response = LoadFixture();
+        var segmentNode = Segment(response);
+        segmentNode["entity"]!["layer"] = "0";
+        UpdateIdentity(segmentNode);
+        var legacy = CadExtractionResultPolicy.Validate(response, TestData.HashA, TestData.HashB, "source.dwg");
+        Assert.IsTrue(legacy.IsSuccess, legacy.Error?.Code);
+        var segment = legacy.Value!.Single();
+        var built = CadSemanticContextBuilder.Build(
+            [new CadSemanticContextInput(segment.SegmentId, segment.Entity.Type, segment.Entity.Handle,
+                segment.Entity.Space, segment.Entity.Layout, segment.Entity.BlockPath,
+                segment.Entity.Layer, segment.SourceText, segment.SourceTextHash,
+                10, 20, 2.5, "ExtentsCenter", "source.dwg")],
+            CadSemanticContextBuilder.PolicyVersionOneThree);
+        Assert.IsTrue(built.IsSuccess, built.Error?.Code);
+        Assert.AreEqual("Unknown", built.Value![segment.SegmentId].Discipline);
+        segmentNode["semanticContext"] = JsonSerializer.SerializeToNode(built.Value[segment.SegmentId], WebJson);
+
+        var rejected = CadExtractionResultPolicy.Validate(response, TestData.HashA, TestData.HashB,
+            "SYNTHETIC-EST-001.dwg");
+        Assert.AreEqual("CAD_SEMANTIC_CONTEXT_MANIFEST_BINDING_MISMATCH", rejected.Error?.Code);
+    }
+
     private static WireEnvelope LoadFixture()
     {
         var path = Path.Combine(Root, "fixtures", "v1", "valid", "cad-extract-response.json");

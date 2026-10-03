@@ -58,7 +58,8 @@ public sealed record AgentTranslationReviewApplyRequest(
     string IdempotencyKey,
     long? ExpectedReviewVersion = null,
     string? ExpectedContextHash = null,
-    ReviewAutomationReceipt? AutomationAuthority = null);
+    ReviewAutomationReceipt? AutomationAuthority = null,
+    bool ReviseApproved = false);
 
 public sealed record AgentGenerationPlanRequest(Guid JobId);
 
@@ -183,6 +184,12 @@ public interface IAgentTranslationWorkflowBackend
     Task<Result<TranslationReviewSnapshot>> LoadReviewAsync(Guid jobId, CancellationToken cancellationToken);
     Task<Result<JobDocument>> ApproveAsync(Guid jobId, IReadOnlyList<ReviewDecisionInput> decisions,
         long expectedReviewVersion, ReviewAutomationReceipt? automationAuthority, CancellationToken cancellationToken);
+    Task<Result<JobDocument>> ReviseApprovedReviewAsync(Guid jobId, long expectedJobVersion,
+        IReadOnlyList<ReviewDecisionInput> decisions, long expectedReviewVersion,
+        ReviewAutomationReceipt automationAuthority, CancellationToken cancellationToken) =>
+        Task.FromResult(Results.Failure<JobDocument>(new ContractError(
+            "APPROVED_REVIEW_REVISION_UNAVAILABLE", ErrorCategory.Unsupported,
+            "The workflow backend does not support approved review revision.", false)));
     Task<Result<JobDocument>> ReconcileFailedGenerationToApprovedAsync(Guid jobId, long expectedVersion,
         AgentGenerationReconciliationAuthority authority, CancellationToken cancellationToken);
     Task<Result<JobDocument>> ReconcileFailedGeometryForReviewAsync(Guid jobId, long expectedVersion, CancellationToken cancellationToken);

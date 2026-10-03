@@ -104,6 +104,23 @@ public sealed class SchemaTests
         outboundContext["discipline"] = "Mechanical";
         Assert.IsFalse(translationSchema.Evaluate(
             JsonDocument.Parse(translation.ToJsonString()).RootElement, evaluationOptions).IsValid);
+
+        cadContext["version"] = "cad-semantic-context/1.3";
+        cadContext["discipline"] = "Structural";
+        cadContext["disciplineEvidence"] = new JsonArray();
+        cadContext["disciplineResolution"] = "DRAWING_NAME_STRUCTURAL_FALLBACK";
+        Assert.IsTrue(cadSchema.Evaluate(JsonDocument.Parse(cad.ToJsonString()).RootElement, evaluationOptions).IsValid);
+        cadContext["version"] = "cad-semantic-context/1.2";
+        Assert.IsFalse(cadSchema.Evaluate(JsonDocument.Parse(cad.ToJsonString()).RootElement, evaluationOptions).IsValid);
+
+        outboundContext["contextVersion"] = "cad-semantic-context/1.3";
+        outboundContext["discipline"] = "Electrical";
+        outboundContext["disciplineResolution"] = "DRAWING_NAME_ELECTRICAL_FALLBACK";
+        Assert.IsTrue(translationSchema.Evaluate(
+            JsonDocument.Parse(translation.ToJsonString()).RootElement, evaluationOptions).IsValid);
+        outboundContext["contextVersion"] = "cad-semantic-context/1.2";
+        Assert.IsFalse(translationSchema.Evaluate(
+            JsonDocument.Parse(translation.ToJsonString()).RootElement, evaluationOptions).IsValid);
     }
 
     private static string[] SchemaPaths => Directory.GetFiles(Path.Combine(Root, "contracts", "v1"), "*.schema.json");

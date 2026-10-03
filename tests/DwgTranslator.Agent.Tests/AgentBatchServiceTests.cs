@@ -67,7 +67,7 @@ public sealed class AgentBatchServiceTests
         Assert.IsTrue(contextual.Success, contextual.Error?.Code);
         Assert.AreEqual(AgentBatchPolicy.ContextualPolicyVersion,
             contextual.Data!["policy"]!.GetValue<string>());
-        Assert.AreEqual(CadSemanticContextBuilder.PolicyVersionOneTwo, contextual.Data["contextPolicyVersion"]!.GetValue<string>());
+        Assert.AreEqual(CadSemanticContextBuilder.CurrentPolicyVersion, contextual.Data["contextPolicyVersion"]!.GetValue<string>());
         Assert.AreEqual(TranslationReviewWorkflow.ContextualPromptTemplateVersion, contextual.Data["promptTemplateVersion"]!.GetValue<string>());
         Assert.AreEqual(4, contextual.Data["maximumNeighborExcerpts"]!.GetValue<int>());
         Assert.AreEqual(160, contextual.Data["maximumNeighborExcerptScalars"]!.GetValue<int>());
@@ -378,6 +378,79 @@ public sealed class AgentBatchServiceTests
         Assert.AreEqual(
             "ResumeTranslationMissingOnly",
             accepted.Data!["entries"]!.AsArray().Single()!["action"]!.GetValue<string>());
+    }
+
+    [TestMethod]
+    public void RateLimitRecoveryRetriesFreshOnlyWithExactFailedOperationAndNoReview()
+    {
+        const string name = "rate-ELE.dwg";
+        File.WriteAllText(Path.Combine(_source, name), "synthetic-dwg");
+        var service = Service(new FakeProcessor(), _ => Task.CompletedTask);
+        var plan = service.Plan(Request()).Data!.AsObject();
+        var manifest = JsonSerializer.Deserialize<AgentBatchManifestEntry[]>(
+            plan["files"]!.ToJsonString(), WebJson)!.Single();
+        var batchId = Guid.Parse(plan["batchId"]!.GetValue<string>());
+        var manifestHash = plan["manifestHash"]!.GetValue<string>();
+        var jobId = Guid.NewGuid();
+        var operationId = Guid.NewGuid().ToString("N");
+        var sourceHash = "sha256:" + Convert.ToHexString(SHA256.HashData("SAFE"u8)).ToLowerInvariant();
+        var segment = new CadTextSegment
+        {
+            SegmentId = "seg_sha256_" + new string('a', 64),
+            Entity = new CadEntityReference
+            {
+                Type = "TEXT", Handle = "1A", Space = "ModelSpace", Layout = null,
+                BlockPath = [], Layer = "ELEC", SubIndex = 0
+            },
+            SourceText = "SAFE", SourceTextHash = sourceHash, LineBreakStyle = "None",
+            ProtectedTokens = [], FieldClassification = "PlainText", State = "Extracted"
+        };
+        var context = CadSemanticContextBuilder.Build([new CadSemanticContextInput(
+            segment.SegmentId, "TEXT", "1A", "ModelSpace", null, [], "ELEC",
+            segment.SourceText, sourceHash, 0, 0, 1, "EntityPosition", name)],
+            CadSemanticContextBuilder.PolicyVersionOneThree);
+        Assert.IsTrue(context.IsSuccess, context.Error?.Code);
+        segment = segment with { SemanticContext = context.Value![segment.SegmentId] };
+        var scope = new ReviewAutomationScope(batchId, manifestHash, AgentBatchPolicy.ContextualPolicyVersion);
+        var specification = new DwgTranslationJobSpecification(manifest.SourcePath, manifest.OutputPath,
+            manifest.Sha256, null, "en-US", TranslationReviewWorkflow.ContextualPromptTemplateVersion,
+            null, ReviewAutomationScope: scope);
+        var data = new DwgTranslationJobData(specification, "sha256:" + new string('b', 64), null,
+            [segment], null);
+        var node = JsonSerializer.SerializeToNode(data, WebJson)!.AsObject();
+        node["failure"] = new JsonObject
+        {
+            ["code"] = "OPENAI_RATE_LIMITED", ["stage"] = "Translation", ["retryable"] = true
+        };
+        var jobRoot = Path.Combine(_workspace, jobId.ToString("D"));
+        Directory.CreateDirectory(jobRoot);
+        File.WriteAllText(Path.Combine(jobRoot, "job.json"), JsonSerializer.Serialize(
+            new JobDocument(jobId, JobState.Failed, 4, DateTimeOffset.UtcNow, node), WebJson));
+        var operationPath = Path.Combine(_root, "logs", "workflow", "operations", operationId + ".json");
+        Directory.CreateDirectory(Path.GetDirectoryName(operationPath)!);
+        var operation = new AgentWorkflowOperation(operationId, "translation.prepare", jobId,
+            "Failed", "Failed", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
+            "OPENAI_RATE_LIMITED", true);
+        File.WriteAllText(operationPath, JsonSerializer.Serialize(operation, WebJson));
+        Directory.CreateDirectory(_output);
+        SaveBatch(new AgentBatchDocument(batchId, 5, "RecoveryRequired", manifestHash, _source, _output,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
+            [new AgentBatchFileProgress(manifest.RelativePath, manifest.Sha256, manifest.OutputPath,
+                AgentBatchFileState.Failed, jobId, ErrorCode: "OPENAI_RATE_LIMITED", Retryable: true,
+                JobVersion: 4, PrepareOperationId: operationId)], StartIdempotencyKey: "rate-parent"));
+
+        var accepted = service.RecoveryPlan(new(batchId, [name]));
+        Assert.IsTrue(accepted.Success, accepted.Error?.Code);
+        Assert.AreEqual("RetryCadFresh",
+            accepted.Data!["entries"]!.AsArray().Single()!["action"]!.GetValue<string>());
+
+        File.WriteAllText(operationPath, JsonSerializer.Serialize(operation with { ErrorCode = "OPENAI_TIMEOUT" }, WebJson));
+        Assert.AreEqual("BATCH_RECOVERY_CHILD_STATE_DIVERGED",
+            service.RecoveryPlan(new(batchId, [name])).Error!.Code);
+        File.WriteAllText(operationPath, JsonSerializer.Serialize(operation, WebJson));
+        Directory.CreateDirectory(Path.Combine(jobRoot, "review"));
+        Assert.AreEqual("BATCH_RECOVERY_CHILD_STATE_DIVERGED",
+            service.RecoveryPlan(new(batchId, [name])).Error!.Code);
     }
 
     [TestMethod]
@@ -753,6 +826,73 @@ public sealed class AgentBatchServiceTests
     }
 
     [TestMethod]
+    public async Task FailedApprovedReviewReconciliationAllowsOneBoundRetryWithoutGeneration()
+    {
+        File.WriteAllText(Path.Combine(_source, "a.dwg"), "a");
+        var processor = new FakeProcessor { FailFirstReconcile = true };
+        var service = Service(processor);
+        var planned = service.Plan(Request()).Data!.AsObject();
+        var batchId = Guid.Parse(planned["batchId"]!.GetValue<string>());
+        var manifest = JsonSerializer.Deserialize<AgentBatchManifestEntry[]>(planned["files"]!.ToJsonString(), WebJson)!.Single();
+        Directory.CreateDirectory(_output);
+        SaveBatch(new AgentBatchDocument(batchId, 7, "ReviewRequired", planned["manifestHash"]!.GetValue<string>(),
+            _source, _output, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
+            [new AgentBatchFileProgress(manifest.RelativePath, manifest.Sha256, manifest.OutputPath,
+                AgentBatchFileState.Reviewing, Guid.NewGuid(), JobVersion: 4)],
+            StartIdempotencyKey: "original-start"));
+
+        var first = new AgentBatchReconcileReviewRequest(batchId, 7, "approved-review-reconcile");
+        Assert.IsTrue(service.ReconcileReview(first).Success);
+        await WaitAsync(() => service.Status(batchId).Data!["state"]!.GetValue<string>() == "RecoveryRequired");
+        var failed = service.Status(batchId).Data!.AsObject();
+        Assert.AreEqual("BATCH_REVIEW_RECONCILIATION_FAILED", failed["errorCode"]!.GetValue<string>());
+        Assert.AreEqual(1, processor.ReconcileCalls);
+        Assert.AreEqual(0, processor.GenerateCalls);
+
+        var retry = service.ReconcileReview(first with { ExpectedBatchVersion = failed["batchVersion"]!.GetValue<long>() });
+        Assert.IsTrue(retry.Success, retry.Error?.Code);
+        Assert.IsFalse(retry.Data!["idempotentReplay"]!.GetValue<bool>());
+        await WaitAsync(() => service.Status(batchId).Data!["state"]!.GetValue<string>() == "ReviewRequired");
+        Assert.AreEqual(2, processor.ReconcileCalls);
+        Assert.AreEqual(0, processor.GenerateCalls);
+        var replay = service.ReconcileReview(first with
+        {
+            ExpectedBatchVersion = service.Status(batchId).Data!["batchVersion"]!.GetValue<long>()
+        });
+        Assert.IsTrue(replay.Data!["idempotentReplay"]!.GetValue<bool>());
+        Assert.AreEqual(2, processor.ReconcileCalls);
+    }
+
+    [TestMethod]
+    public async Task FailedReviewReconciliationCannotRetryMoreThanOnce()
+    {
+        File.WriteAllText(Path.Combine(_source, "a.dwg"), "a");
+        var processor = new FakeProcessor(reconcileFailure: "BATCH_SUPERSEDING_APPROVED_REVIEW_INVALID");
+        var service = Service(processor);
+        var planned = service.Plan(Request()).Data!.AsObject();
+        var batchId = Guid.Parse(planned["batchId"]!.GetValue<string>());
+        var manifest = JsonSerializer.Deserialize<AgentBatchManifestEntry[]>(planned["files"]!.ToJsonString(), WebJson)!.Single();
+        Directory.CreateDirectory(_output);
+        SaveBatch(new AgentBatchDocument(batchId, 7, "ReviewRequired", planned["manifestHash"]!.GetValue<string>(),
+            _source, _output, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
+            [new AgentBatchFileProgress(manifest.RelativePath, manifest.Sha256, manifest.OutputPath,
+                AgentBatchFileState.Reviewing, Guid.NewGuid(), JobVersion: 4)],
+            StartIdempotencyKey: "original-start"));
+        var request = new AgentBatchReconcileReviewRequest(batchId, 7, "single-retry-only");
+        Assert.IsTrue(service.ReconcileReview(request).Success);
+        await WaitAsync(() => service.Status(batchId).Data!["state"]!.GetValue<string>() == "RecoveryRequired");
+        var firstFailedVersion = service.Status(batchId).Data!["batchVersion"]!.GetValue<long>();
+        Assert.IsTrue(service.ReconcileReview(request with { ExpectedBatchVersion = firstFailedVersion }).Success);
+        await WaitAsync(() => service.Status(batchId).Data!["batchVersion"]!.GetValue<long>() > firstFailedVersion &&
+            service.Status(batchId).Data!["state"]!.GetValue<string>() == "RecoveryRequired");
+        var secondFailedVersion = service.Status(batchId).Data!["batchVersion"]!.GetValue<long>();
+        var replay = service.ReconcileReview(request with { ExpectedBatchVersion = secondFailedVersion });
+        Assert.IsTrue(replay.Data!["idempotentReplay"]!.GetValue<bool>());
+        Assert.AreEqual(2, processor.ReconcileCalls);
+        Assert.AreEqual(0, processor.GenerateCalls);
+    }
+
+    [TestMethod]
     public async Task TwoCadStallsOpenCircuitAndRestartNeverAutocontinues()
     {
         foreach (var name in new[] { "a.dwg", "b.dwg", "c.dwg" }) File.WriteAllText(Path.Combine(_source, name), name);
@@ -778,7 +918,8 @@ public sealed class AgentBatchServiceTests
         Func<Func<Task>, Task>? schedule = null,
         Func<DateTimeOffset>? utcNow = null) => new(new AgentBetaConfiguration(
         "dwg-agent-beta-bootstrap/1.0", "AgentBeta", true, true, _workspace, Path.Combine(_root, "logs"),
-        AllowedDwgRoot: _input, BatchOutputRoots: [_output]), processor, utcNow: utcNow, schedule: schedule);
+        AllowedDwgRoot: _input, BatchOutputRoots: [_output]), processor, utcNow: utcNow, schedule: schedule,
+        cadProcessExists: () => false);
     private AgentBatchPlanRequest Request() => new(_source, _output, "en-US", "Auto",
         ArchitecturalMepTerminologyPolicy.Version, AgentBatchPolicy.PolicyVersion);
     private void SaveBatch(AgentBatchDocument document)
@@ -974,6 +1115,7 @@ public sealed class AgentBatchServiceTests
     {
         public int PrepareCalls, GenerateCalls, ReconcileCalls;
         public string? SecondStall { get; init; }
+        public bool FailFirstReconcile { get; init; }
         public Task<AgentBatchFileProgress> PrepareAsync(AgentBatchPlan plan, AgentBatchManifestEntry file, CancellationToken cancellationToken)
         {
             PrepareCalls++;
@@ -992,8 +1134,9 @@ public sealed class AgentBatchServiceTests
             ReviewAutomationScopeTransition? scopeTransition, CancellationToken cancellationToken)
         {
             ReconcileCalls++;
-            if (reconcileFailure is not null)
-                return Task.FromResult(file with { State = AgentBatchFileState.Failed, ErrorCode = reconcileFailure, Retryable = false });
+            if (reconcileFailure is not null || (FailFirstReconcile && ReconcileCalls == 1))
+                return Task.FromResult(file with { State = AgentBatchFileState.Failed,
+                    ErrorCode = reconcileFailure ?? "BATCH_CHILD_REVIEW_NOT_READY", Retryable = false });
             return Task.FromResult(file with
             {
                 State = AgentBatchFileState.Reviewing,

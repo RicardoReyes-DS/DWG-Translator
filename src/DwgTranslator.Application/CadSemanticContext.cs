@@ -27,15 +27,18 @@ public static class CadSemanticContextBuilder
     public const string PolicyVersionOneZero = "cad-semantic-context/1.0";
     public const string PolicyVersionOneOne = "cad-semantic-context/1.1";
     public const string PolicyVersionOneTwo = "cad-semantic-context/1.2";
+    public const string PolicyVersionOneThree = "cad-semantic-context/1.3";
     public const string PolicyVersion = PolicyVersionOneZero;
-    public const string CurrentPolicyVersion = PolicyVersionOneTwo;
+    public const string CurrentPolicyVersion = PolicyVersionOneThree;
     public const string LocalEvidenceOverridesDrawingHint = "LOCAL_EVIDENCE_OVERRIDES_DRAWING_HINT";
     public const string DrawingNameArchitecturalFallback = "DRAWING_NAME_ARCHITECTURAL_FALLBACK";
+    public const string DrawingNameElectricalFallback = "DRAWING_NAME_ELECTRICAL_FALLBACK";
+    public const string DrawingNameStructuralFallback = "DRAWING_NAME_STRUCTURAL_FALLBACK";
     public const int MaximumNeighbors = 4;
     public const double MaximumNeighborDistanceInTextHeights = 40d;
 
     private static readonly string[] DisciplineOrder =
-        ["Architectural", "Mechanical", "Electrical", "Plumbing", "Fire", "Controls"];
+        ["Architectural", "Structural", "Mechanical", "Electrical", "Plumbing", "Fire", "Controls"];
 
     public static Result<IReadOnlyDictionary<string, CadSemanticContext>> Build(
         IReadOnlyList<CadSemanticContextInput> inputs) => Build(inputs, PolicyVersionOneZero);
@@ -48,7 +51,8 @@ public static class CadSemanticContextBuilder
         if (!IsSupportedPolicyVersion(policyVersion))
             return Failure<IReadOnlyDictionary<string, CadSemanticContext>>(
                 "CAD_SEMANTIC_CONTEXT_VERSION_UNSUPPORTED", "The requested semantic context policy version is not supported.");
-        if (inputs.Count > 100_000 || inputs.Any(input => !Valid(input)) ||
+        if (inputs.Count > 100_000 || inputs.Any(input => !Valid(input) ||
+            policyVersion == PolicyVersionOneThree && HasConflictingDrawingTokens(input.DrawingHint)) ||
             inputs.Select(input => input.SegmentId).Distinct(StringComparer.Ordinal).Count() != inputs.Count ||
             inputs.Select(input => input.Handle).Distinct(StringComparer.Ordinal).Count() != inputs.Count)
         {
@@ -146,7 +150,7 @@ public static class CadSemanticContextBuilder
     }
 
     public static bool IsSupportedPolicyVersion(string? policyVersion) =>
-        policyVersion is PolicyVersionOneZero or PolicyVersionOneOne or PolicyVersionOneTwo;
+        policyVersion is PolicyVersionOneZero or PolicyVersionOneOne or PolicyVersionOneTwo or PolicyVersionOneThree;
 
     public static Result<string> AggregateHash(IEnumerable<CadTextSegment> segments)
     {
@@ -273,7 +277,8 @@ public static class CadSemanticContextBuilder
             !ContractPatterns.Sha256().IsMatch(context.NeighborhoodDigest ?? string.Empty) ||
             context.SheetRole is not ("Model" or "Sheet") ||
             context.SheetRole != (segment.Entity.Space == "PaperSpace" ? "Sheet" : "Model") ||
-            context.Discipline is not ("Unknown" or "Architectural" or "Mechanical" or "Electrical" or "Plumbing" or "Fire" or "Controls") ||
+            context.Discipline is not ("Unknown" or "Architectural" or "Structural" or "Mechanical" or "Electrical" or "Plumbing" or "Fire" or "Controls") ||
+            (context.Discipline == "Structural" && context.Version != PolicyVersionOneThree) ||
             context.DisciplineEvidence is null || context.DisciplineEvidence.Count > 8 ||
             context.DisciplineEvidence.Any(value => !ValidDisciplineEvidence(value)) ||
             context.DisciplineEvidence.Distinct(StringComparer.Ordinal).Count() != context.DisciplineEvidence.Count ||
@@ -283,6 +288,9 @@ public static class CadSemanticContextBuilder
             (context.Version == PolicyVersionOneOne && context.DisciplineResolution is not (null or LocalEvidenceOverridesDrawingHint)) ||
             (context.Version == PolicyVersionOneTwo && context.DisciplineResolution is not
                 (null or LocalEvidenceOverridesDrawingHint or DrawingNameArchitecturalFallback)) ||
+            (context.Version == PolicyVersionOneThree && context.DisciplineResolution is not
+                (null or LocalEvidenceOverridesDrawingHint or DrawingNameArchitecturalFallback or
+                    DrawingNameElectricalFallback or DrawingNameStructuralFallback)) ||
             context.AnchorSource is not ("ExtentsCenter" or "EntityPosition") ||
             context.XBand is < 0 or > 15 || context.YBand is < 0 or > 15 || context.ReadingOrder < 0 ||
             context.Signals is null || context.Signals.Count > 8 || context.Signals.Any(signal => signal is not
@@ -306,7 +314,8 @@ public static class CadSemanticContextBuilder
                 !string.Equals(segment.Entity.Layout, target.Entity.Layout, StringComparison.Ordinal))
                 return false;
         }
-        var entityDiscipline = ResolveDisciplineV1_0(segment.Entity.Layer, segment.Entity.Layout, segment.Entity.BlockPath);
+        var entityDiscipline = ResolveDisciplineV1_0(segment.Entity.Layer, segment.Entity.Layout, segment.Entity.BlockPath,
+            includeStructural: context.Version == PolicyVersionOneThree);
         var expectedEvidence = entityDiscipline.Evidence
             .Concat(context.DisciplineEvidence.Where(value => value == "DRAWING_NAME_CONTROLS"))
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
@@ -316,6 +325,8 @@ public static class CadSemanticContextBuilder
             PolicyVersionOneOne => ResolveDisciplineV1_1(entityDiscipline,
                 expectedEvidence.Contains("DRAWING_NAME_CONTROLS", StringComparer.Ordinal)),
             PolicyVersionOneTwo => ResolveDisciplineV1_2ForValidation(entityDiscipline,
+                expectedEvidence.Contains("DRAWING_NAME_CONTROLS", StringComparer.Ordinal), context),
+            PolicyVersionOneThree => ResolveDisciplineV1_3ForValidation(entityDiscipline,
                 expectedEvidence.Contains("DRAWING_NAME_CONTROLS", StringComparer.Ordinal), context),
             _ => new DisciplineResult("Unknown", false, [])
         };
@@ -406,12 +417,17 @@ public static class CadSemanticContextBuilder
         var local = ResolveDisciplineV1_0(input.Layer, input.Layout, input.BlockPath);
         if (policyVersion == PolicyVersionOneOne)
             return ResolveDisciplineV1_1(local, HasDrawingControlsHint(input.DrawingHint));
-        return ResolveDisciplineV1_2(local, HasDrawingControlsHint(input.DrawingHint),
-            HasAsciiDrawingToken(input.DrawingHint, "ARQ"));
+        if (policyVersion == PolicyVersionOneTwo)
+            return ResolveDisciplineV1_2(local, HasDrawingControlsHint(input.DrawingHint),
+                HasAsciiDrawingToken(input.DrawingHint, "ARQ"));
+        var structuralLocal = ResolveDisciplineV1_0(input.Layer, input.Layout, input.BlockPath,
+            includeStructural: true);
+        return ResolveDisciplineV1_3(structuralLocal, HasDrawingControlsHint(input.DrawingHint),
+            DrawingTokenDiscipline(input.DrawingHint));
     }
 
     private static DisciplineResult ResolveDisciplineV1_0(string layer, string? layout, IReadOnlyList<string> blockPath,
-        string? drawingHint = null)
+        string? drawingHint = null, bool includeStructural = false)
     {
         var values = new List<(string Origin, string Value)> { ("LAYER", layer) };
         if (layout is not null) values.Add(("LAYOUT", layout));
@@ -432,6 +448,8 @@ public static class CadSemanticContextBuilder
                 continue;
             }
             AddEvidence(matches, "Architectural", origin, value, "ARCH", "ARCHITECTURAL", "ARQ", "ARQUITECTURA", "ARCHITECTURE");
+            if (includeStructural)
+                AddEvidence(matches, "Structural", origin, value, "STRUCT", "STRUCTURAL", "ESTRUCTURAL");
             AddEvidence(matches, "Mechanical", origin, value, "MECH", "MECHANICAL", "MEC", "HVAC", "DUCT", "DUCTO");
             AddEvidence(matches, "Electrical", origin, value, "ELEC", "ELECTR", "ELECTRICAL", "ELECTRICO", "ELÉCTRICO");
             AddEvidence(matches, "Plumbing", origin, value, "PLUMB", "PLUMBING", "PLOM", "SANIT", "PIPING", "TUBER");
@@ -484,6 +502,40 @@ public static class CadSemanticContextBuilder
         return ResolveDisciplineV1_2(local, drawingControls, drawingArchitectural);
     }
 
+    private static DisciplineResult ResolveDisciplineV1_3(
+        DisciplineResult local, bool drawingControls, string? drawingDiscipline)
+    {
+        var evidence = local.Evidence.Concat(drawingControls ? ["DRAWING_NAME_CONTROLS"] : Array.Empty<string>())
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (local.Conflict) return new("Unknown", true, evidence);
+        if (local.Name != "Unknown")
+            return new(local.Name, false, evidence,
+                drawingControls && local.Name != "Controls" ? LocalEvidenceOverridesDrawingHint : null);
+        return drawingDiscipline switch
+        {
+            "Architectural" => new("Architectural", false, [], DrawingNameArchitecturalFallback),
+            "Electrical" => new("Electrical", false, [], DrawingNameElectricalFallback),
+            "Structural" => new("Structural", false, [], DrawingNameStructuralFallback),
+            _ => drawingControls ? new("Controls", false, evidence) : new("Unknown", false, evidence)
+        };
+    }
+
+    private static DisciplineResult ResolveDisciplineV1_3ForValidation(
+        DisciplineResult local, bool drawingControls, CadSemanticContext context)
+    {
+        var drawingDiscipline = context.DisciplineResolution switch
+        {
+            DrawingNameArchitecturalFallback => "Architectural",
+            DrawingNameElectricalFallback => "Electrical",
+            DrawingNameStructuralFallback => "Structural",
+            _ => null
+        };
+        if (drawingDiscipline is not null &&
+            (context.DisciplineEvidence.Count != 0 || local.Name != "Unknown" || local.Conflict))
+            return new("Unknown", false, []);
+        return ResolveDisciplineV1_3(local, drawingControls, drawingDiscipline);
+    }
+
     private static bool HasDrawingControlsHint(string? drawingHint)
     {
         if (drawingHint is null) return false;
@@ -496,6 +548,32 @@ public static class CadSemanticContextBuilder
         !string.IsNullOrWhiteSpace(manifestBoundBasename) && manifestBoundBasename.Length <= 255 &&
         string.Equals(Path.GetFileName(manifestBoundBasename), manifestBoundBasename, StringComparison.Ordinal) &&
         HasAsciiDrawingToken(manifestBoundBasename, "ARQ");
+
+    internal static bool IsUnambiguousArchitecturalManifestBasename(string? basename) =>
+        IsArchitecturalManifestBasename(basename) && !HasConflictingDrawingTokens(basename);
+
+    internal static bool IsElectricalManifestBasename(string? basename) =>
+        ValidManifestBasename(basename) && !HasConflictingDrawingTokens(basename) &&
+        HasAsciiDrawingToken(basename, "ELE");
+
+    internal static bool IsStructuralManifestBasename(string? basename) =>
+        ValidManifestBasename(basename) && !HasConflictingDrawingTokens(basename) &&
+        HasAsciiDrawingToken(basename, "EST");
+
+    private static bool ValidManifestBasename(string? basename) =>
+        !string.IsNullOrWhiteSpace(basename) && basename.Length <= 255 &&
+        string.Equals(Path.GetFileName(basename), basename, StringComparison.Ordinal);
+
+    private static string? DrawingTokenDiscipline(string? basename) =>
+        HasAsciiDrawingToken(basename, "ARQ") ? "Architectural" :
+        HasAsciiDrawingToken(basename, "ELE") ? "Electrical" :
+        HasAsciiDrawingToken(basename, "EST") ? "Structural" : null;
+
+    private static bool HasConflictingDrawingTokens(string? basename) =>
+        (HasAsciiDrawingToken(basename, "ARQ") ? 1 : 0) +
+        (HasAsciiDrawingToken(basename, "ELE") ? 1 : 0) +
+        (HasAsciiDrawingToken(basename, "EST") ? 1 : 0) +
+        (HasDrawingControlsHint(basename) ? 1 : 0) > 1;
 
     private static bool HasAsciiDrawingToken(string? drawingHint, string token)
     {
@@ -605,6 +683,7 @@ public static class CadSemanticContextBuilder
         PolicyVersionOneZero => "dwg-translator/neighborhood/v1",
         PolicyVersionOneOne => "dwg-translator/neighborhood/v1.1",
         PolicyVersionOneTwo => "dwg-translator/neighborhood/v1.2",
+        PolicyVersionOneThree => "dwg-translator/neighborhood/v1.3",
         _ => throw new ArgumentOutOfRangeException(nameof(policyVersion))
     };
 
@@ -613,6 +692,7 @@ public static class CadSemanticContextBuilder
         PolicyVersionOneZero => "dwg-translator/semantic-key/v1",
         PolicyVersionOneOne => "dwg-translator/semantic-key/v1.1",
         PolicyVersionOneTwo => "dwg-translator/semantic-key/v1.2",
+        PolicyVersionOneThree => "dwg-translator/semantic-key/v1.3",
         _ => throw new ArgumentOutOfRangeException(nameof(policyVersion))
     };
 
@@ -621,6 +701,7 @@ public static class CadSemanticContextBuilder
         PolicyVersionOneZero => "dwg-translator/semantic-context/v1",
         PolicyVersionOneOne => "dwg-translator/semantic-context/v1.1",
         PolicyVersionOneTwo => "dwg-translator/semantic-context/v1.2",
+        PolicyVersionOneThree => "dwg-translator/semantic-context/v1.3",
         _ => throw new ArgumentOutOfRangeException(nameof(policyVersion))
     };
 
@@ -629,6 +710,7 @@ public static class CadSemanticContextBuilder
         PolicyVersionOneZero => "dwg-translator/semantic-context-set/v1",
         PolicyVersionOneOne => "dwg-translator/semantic-context-set/v1.1",
         PolicyVersionOneTwo => "dwg-translator/semantic-context-set/v1.2",
+        PolicyVersionOneThree => "dwg-translator/semantic-context-set/v1.3",
         _ => throw new ArgumentOutOfRangeException(nameof(policyVersion))
     };
 
@@ -640,7 +722,7 @@ public static class CadSemanticContextBuilder
         yield return discipline.Name;
         yield return discipline.Conflict ? "conflict" : "clear";
         yield return string.Join("\u001f", discipline.Evidence);
-        if (policyVersion is PolicyVersionOneOne or PolicyVersionOneTwo)
+        if (policyVersion is PolicyVersionOneOne or PolicyVersionOneTwo or PolicyVersionOneThree)
             yield return discipline.Resolution ?? string.Empty;
         yield return string.Join("\u001f", signals);
         yield return neighborhoodDigest;

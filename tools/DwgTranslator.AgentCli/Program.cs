@@ -91,7 +91,8 @@ static async Task<AgentMcpResult> ExecuteAsync(IAgentHostReadClient client, CliA
             idempotencyKey = o["idempotency-key"],
             expectedReviewVersion = NullableLong(o, "expected-review-version"),
             expectedContextHash = o.GetValueOrDefault("expected-context-hash"),
-            automationAuthority = ReadReviewAutomationAuthority(o.GetValueOrDefault("automation-authority-json"))
+            automationAuthority = ReadReviewAutomationAuthority(o.GetValueOrDefault("automation-authority-json")),
+            reviseApproved = parsed.Flags.Contains("revise-approved")
         }, CancellationToken.None),
         "generation-plan" => await client.CreateGenerationPlanAsync(new { jobId = Guid.Parse(o["job-id"]) }, CancellationToken.None),
         "generation-reconcile-plan" => await client.CreateGenerationReconciliationPlanAsync(new { jobId = Guid.Parse(o["job-id"]) }, CancellationToken.None),
@@ -239,7 +240,7 @@ internal sealed record CliArguments(
     };
     private static readonly HashSet<string> BooleanFlags = new(StringComparer.Ordinal)
     {
-        "include-text", "bulk-approve"
+        "include-text", "bulk-approve", "revise-approved"
     };
 
     internal static CliArguments Parse(string[] values)

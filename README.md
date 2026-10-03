@@ -52,6 +52,7 @@ flowchart LR
 ### Decisiones técnicas destacadas
 
 - Identidad estable de segmentos para asociar propuestas con entidades CAD.
+- Contexto CAD versionado con clasificación de disciplina ligada al nombre exacto del plano y rechazo de etiquetas ambiguas.
 - Revisión explícita antes de escribir y exclusión deliberada de contenido fuera de alcance.
 - Escritura sobre una salida nueva, seguida de reapertura y comprobaciones de integridad.
 - Separación del límite CAD, la lógica de aplicación y el adaptador de traducción.
@@ -72,7 +73,7 @@ Los proyectos CAD declaran referencias a assemblies externos de AutoCAD; esos as
 
 ## Verificación de esta muestra
 
-En la copia curada pasaron **361 pruebas**: 251 de core y contratos, 89 de Agent y 21 de MCP. La receta publicó en Release la GUI WPF, el Host, el CLI y el servidor MCP. Los dos adaptadores CAD compilaron por separado, sin advertencias, usando referencias externas disponibles en la máquina de verificación. No se ejecutó AutoCAD ni se abrió un DWG en esta comprobación.
+En la última compilación de esta fuente pasaron **372 pruebas**: 258 de core y contratos, 93 de Agent y 21 de MCP. La receta publicó en Release la GUI WPF, el Host, el CLI y el servidor MCP. Los dos adaptadores CAD compilaron por separado, sin advertencias, usando referencias externas disponibles en la máquina de verificación. Estas pruebas de código no sustituyen la validación CAD y visual de una instalación autorizada.
 
 ```powershell
 dotnet test tests/DwgTranslator.Core.Tests/DwgTranslator.Core.Tests.csproj -c Release

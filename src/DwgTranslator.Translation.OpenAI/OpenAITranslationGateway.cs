@@ -125,7 +125,8 @@ public sealed class OpenAITranslationGateway : ITranslationGateway
 
         using (response)
         {
-            if (!response.IsSuccessStatusCode) return MapHttpFailure(response.StatusCode);
+            if (!response.IsSuccessStatusCode)
+                return await MapHttpFailureAsync(response, cancellationToken).ConfigureAwait(false);
             OpenAIResponse? apiResponse;
             try
             {
@@ -225,6 +226,59 @@ public sealed class OpenAITranslationGateway : ITranslationGateway
             }
         }
     };
+
+    private static async Task<Result<WireEnvelope>> MapHttpFailureAsync(
+        HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (response.StatusCode != HttpStatusCode.TooManyRequests)
+            return MapHttpFailure(response.StatusCode);
+        var (type, code) = await ReadBoundedProviderErrorAsync(response.Content, cancellationToken).ConfigureAwait(false);
+        return code switch
+        {
+            "credit_balance_exhausted" => Failure("OPENAI_CREDIT_BALANCE_EXHAUSTED", ErrorCategory.Configuration,
+                "The provider account has no available credits.", false),
+            "organization_spend_limit_exceeded" or "project_spend_limit_exceeded" =>
+                Failure("OPENAI_SPEND_LIMIT_EXCEEDED", ErrorCategory.Configuration,
+                    "The provider account reached a configured spend limit.", false),
+            "organization_usage_limit_exceeded" => Failure("OPENAI_USAGE_LIMIT_EXCEEDED", ErrorCategory.Configuration,
+                "The provider account reached its usage limit.", false),
+            _ when type == "insufficient_quota" => Failure("OPENAI_QUOTA_EXHAUSTED", ErrorCategory.Configuration,
+                "The provider account has insufficient quota.", false),
+            _ => MapHttpFailure(response.StatusCode)
+        };
+    }
+
+    private static async Task<(string? Type, string? Code)> ReadBoundedProviderErrorAsync(
+        HttpContent? content, CancellationToken cancellationToken)
+    {
+        const int maximumBytes = 8192;
+        if (content is null || content.Headers.ContentLength is > maximumBytes) return (null, null);
+        try
+        {
+            using var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            var buffer = new byte[maximumBytes + 1];
+            var count = 0;
+            while (count < buffer.Length)
+            {
+                var read = await stream.ReadAsync(buffer.AsMemory(count), cancellationToken).ConfigureAwait(false);
+                if (read == 0) break;
+                count += read;
+            }
+            if (count == 0 || count > maximumBytes) return (null, null);
+            using var document = JsonDocument.Parse(buffer.AsMemory(0, count));
+            if (!document.RootElement.TryGetProperty("error", out var error) ||
+                error.ValueKind != JsonValueKind.Object) return (null, null);
+            return (ErrorField(error, "type"), ErrorField(error, "code"));
+        }
+        catch (Exception exception) when (exception is IOException or JsonException or HttpRequestException)
+        {
+            return (null, null);
+        }
+    }
+
+    private static string? ErrorField(JsonElement error, string name) =>
+        error.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() : null;
 
     private static Result<WireEnvelope> MapHttpFailure(HttpStatusCode status) => status switch
     {

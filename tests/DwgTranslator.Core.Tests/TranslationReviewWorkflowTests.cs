@@ -215,7 +215,7 @@ public sealed class TranslationReviewWorkflowTests
     }
 
     [TestMethod]
-    public async Task Prompt12PersistsCurrentContextVersionWhileLegacyContextRemainsValid()
+    public async Task ContextualPromptPersistsCurrentContextVersionWhileLegacyContextRemainsValid()
     {
         var current = ContextualSegmentsForVersion(CadSemanticContextBuilder.CurrentPolicyVersion,
             ('a', "PUMP", 0));
@@ -230,7 +230,7 @@ public sealed class TranslationReviewWorkflowTests
             TranslationReviewWorkflow.ContextualPromptTemplateVersion, null, CancellationToken.None);
 
         Assert.IsTrue(currentResult.IsSuccess, currentResult.Error?.Code);
-        Assert.AreEqual(CadSemanticContextBuilder.PolicyVersionOneTwo, currentResult.Value!.ContextPolicyVersion);
+        Assert.AreEqual(CadSemanticContextBuilder.CurrentPolicyVersion, currentResult.Value!.ContextPolicyVersion);
         Assert.IsTrue(legacyResult.IsSuccess, legacyResult.Error?.Code);
         Assert.AreEqual(CadSemanticContextBuilder.PolicyVersionOneZero, legacyResult.Value!.ContextPolicyVersion);
     }

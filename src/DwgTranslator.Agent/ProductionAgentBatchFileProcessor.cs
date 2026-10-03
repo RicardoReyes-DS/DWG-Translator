@@ -379,8 +379,9 @@ public sealed class ProductionAgentBatchFileProcessor : IAgentBatchFileProcessor
             status = terminal.Data!.AsObject();
             useCurrentVersionForRebind = true;
         }
-        var approvedSupersedingCandidate = Text(status, "state") == "Approved" && scopeTransition is not null;
-        if (Text(status, "state") != "ReviewRequired" && !approvedSupersedingCandidate)
+        var approvedCandidate = Text(status, "state") == "Approved";
+        var approvedSupersedingCandidate = approvedCandidate && scopeTransition is not null;
+        if (Text(status, "state") != "ReviewRequired" && !approvedCandidate)
             return Failure(file, "BATCH_CHILD_REVIEW_NOT_READY");
         if (scopeTransition is not null && !scopeAlreadyRebound && !approvedSupersedingCandidate)
         {
@@ -403,7 +404,7 @@ public sealed class ProductionAgentBatchFileProcessor : IAgentBatchFileProcessor
         do
         {
             var page = await _workflow.GetReviewAsync(new(
-                    file.JobId.Value, pageNumber++, 200, approvedSupersedingCandidate), cancellationToken)
+                    file.JobId.Value, pageNumber++, 200, approvedCandidate), cancellationToken)
                 .ConfigureAwait(false);
             if (!page.Success) return Failure(file, page);
             var data = page.Data!.AsObject();
@@ -426,17 +427,34 @@ public sealed class ProductionAgentBatchFileProcessor : IAgentBatchFileProcessor
 
         if (rows.Count != expectedTotal || reviewData is null)
             return Failure(file, "BATCH_REVIEW_RECONCILIATION_INVALID");
-        if (approvedSupersedingCandidate)
+        if (approvedCandidate)
         {
             var approvedContextHash = OptionalText(reviewData, "contextHash") ?? string.Empty;
-            var approvedReceiptNode = reviewData["automationReceipt"];
-            var approvedDecisions = rows.Select(row => new ReviewDecisionInput(
-                Text(row, "segmentId"), OptionalText(row, "finalText"), null)).ToArray();
-            if (!TryReviewAutomationReceipt(approvedReceiptNode, out var approvedReceipt) || approvedReceipt is null ||
-                !HistoricalIncidentRecoveryPolicy.ValidSupersedingApprovedDecisionSet(
-                    file.JobId.Value, file.RelativePath, approvedContextHash, approvedReceipt, approvedDecisions) ||
-                !ValidApprovedSupersedingTransition(plan, file, scopeTransition!, approvedReceipt))
-                return Failure(file, "BATCH_SUPERSEDING_APPROVED_REVIEW_INVALID");
+            var approvedReceiptNode = reviewData["automationReceipt"] as JsonObject;
+            var ordinaryApproved = (file.State is AgentBatchFileState.Queued or AgentBatchFileState.Reviewing) &&
+                file.JobVersion > 0 && Long(status, "jobVersion") == file.JobVersion + 1 &&
+                Long(reviewData, "jobVersion") == Long(status, "jobVersion") &&
+                Long(reviewData, "reviewVersion") > file.ReviewVersion &&
+                Text(reviewData, "state") == "Approved" &&
+                OptionalText(reviewData, "contextPolicyVersion") == plan.ContextPolicyVersion &&
+                (file.ContextHash is null || file.ContextHash == approvedContextHash) &&
+                file.OutputHash is null && file.GenerateOperationId is null &&
+                !File.Exists(file.OutputPath) && !Directory.Exists(file.OutputPath) &&
+                ValidExternalAuthority(approvedReceiptNode, plan, approvedContextHash, rows) &&
+                rows.All(row => Text(row, "state") == "Approved" &&
+                    OptionalText(row, "finalText") is not null &&
+                    OptionalText(row, "exclusionReason") is null);
+            if (!ordinaryApproved)
+            {
+                var approvedDecisions = rows.Select(row => new ReviewDecisionInput(
+                    Text(row, "segmentId"), OptionalText(row, "finalText"), null)).ToArray();
+                if (!approvedSupersedingCandidate ||
+                    !TryReviewAutomationReceipt(approvedReceiptNode, out var approvedReceipt) || approvedReceipt is null ||
+                    !HistoricalIncidentRecoveryPolicy.ValidSupersedingApprovedDecisionSet(
+                        file.JobId.Value, file.RelativePath, approvedContextHash, approvedReceipt, approvedDecisions) ||
+                    !ValidApprovedSupersedingTransition(plan, file, scopeTransition!, approvedReceipt))
+                    return Failure(file, "BATCH_APPROVED_REVIEW_INVALID");
+            }
         }
         var usage = reviewData["usage"]?.AsObject();
         var contextHash = OptionalText(reviewData, "contextHash");

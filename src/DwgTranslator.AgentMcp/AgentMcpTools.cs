@@ -102,6 +102,7 @@ public sealed class AgentMcpTools(IAgentHostReadClient host)
         long? expectedReviewVersion = null,
         string? expectedContextHash = null,
         AgentMcpReviewAutomationReceipt? automationAuthority = null,
+        bool reviseApproved = false,
         CancellationToken cancellationToken = default) => Guid.TryParse(jobId, out var parsed) && parsed != Guid.Empty
         ? WrapAsync(host.ApplyTranslationReviewAsync(new
         {
@@ -113,7 +114,8 @@ public sealed class AgentMcpTools(IAgentHostReadClient host)
             idempotencyKey,
             expectedReviewVersion,
             expectedContextHash,
-            automationAuthority
+            automationAuthority,
+            reviseApproved
         }, cancellationToken))
         : InvalidJob("translation review apply");
 

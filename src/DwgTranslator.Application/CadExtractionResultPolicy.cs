@@ -66,6 +66,34 @@ public static class CadExtractionResultPolicy
                 !CadSemanticContextBuilder.IsArchitecturalManifestBasename(manifestBoundBasename))
                 return Failure("CAD_SEMANTIC_CONTEXT_MANIFEST_BINDING_MISMATCH", ErrorCategory.Integrity,
                     "Architectural drawing-name fallback requires the delimited ARQ token in the manifest-bound basename.");
+            if (payload.Segments.Any(segment => segment.SemanticContext is
+                {
+                    Version: CadSemanticContextBuilder.PolicyVersionOneThree,
+                    DisciplineResolution: CadSemanticContextBuilder.DrawingNameArchitecturalFallback
+                }) && !CadSemanticContextBuilder.IsUnambiguousArchitecturalManifestBasename(manifestBoundBasename) ||
+                payload.Segments.Any(segment => segment.SemanticContext is
+                {
+                    Version: CadSemanticContextBuilder.PolicyVersionOneThree,
+                    DisciplineResolution: CadSemanticContextBuilder.DrawingNameElectricalFallback
+                }) && !CadSemanticContextBuilder.IsElectricalManifestBasename(manifestBoundBasename) ||
+                payload.Segments.Any(segment => segment.SemanticContext is
+                {
+                    Version: CadSemanticContextBuilder.PolicyVersionOneThree,
+                    DisciplineResolution: CadSemanticContextBuilder.DrawingNameStructuralFallback
+                }) && !CadSemanticContextBuilder.IsStructuralManifestBasename(manifestBoundBasename))
+                return Failure("CAD_SEMANTIC_CONTEXT_MANIFEST_BINDING_MISMATCH", ErrorCategory.Integrity,
+                    "A drawing-name discipline fallback requires its unique delimited token in the manifest-bound basename.");
+            if ((CadSemanticContextBuilder.IsUnambiguousArchitecturalManifestBasename(manifestBoundBasename) ||
+                 CadSemanticContextBuilder.IsElectricalManifestBasename(manifestBoundBasename) ||
+                 CadSemanticContextBuilder.IsStructuralManifestBasename(manifestBoundBasename)) &&
+                payload.Segments.Any(segment => segment.SemanticContext is
+                {
+                    Version: CadSemanticContextBuilder.PolicyVersionOneThree,
+                    Discipline: "Unknown",
+                    DisciplineConflict: false
+                } context && context.DisciplineEvidence.Count == 0))
+                return Failure("CAD_SEMANTIC_CONTEXT_MANIFEST_BINDING_MISMATCH", ErrorCategory.Integrity,
+                    "An unambiguous manifest token cannot be omitted from an otherwise unclassified semantic context.");
         }
 
         return Results.Success<IReadOnlyList<CadTextSegment>>(payload.Segments.AsReadOnly());

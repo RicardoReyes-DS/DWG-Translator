@@ -101,6 +101,54 @@ public sealed class OpenAITranslationGatewayTests
     }
 
     [TestMethod]
+    public async Task AdapterStopsForProviderQuotaAndSpendFailuresWithoutReturningProviderBody()
+    {
+        var cases = new[]
+        {
+            ("insufficient_quota", "credit_balance_exhausted", "OPENAI_CREDIT_BALANCE_EXHAUSTED"),
+            ("insufficient_quota", "organization_spend_limit_exceeded", "OPENAI_SPEND_LIMIT_EXCEEDED"),
+            ("insufficient_quota", "project_spend_limit_exceeded", "OPENAI_SPEND_LIMIT_EXCEEDED"),
+            ("insufficient_quota", "organization_usage_limit_exceeded", "OPENAI_USAGE_LIMIT_EXCEEDED"),
+            ("insufficient_quota", "unknown_quota_code", "OPENAI_QUOTA_EXHAUSTED")
+        };
+        var reference = SecretReference.Create("credential-manager:dwg-translator/openai").Value!;
+
+        foreach (var (type, code, expected) in cases)
+        {
+            var body = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                error = new { type, code, message = "sensitive provider body" }
+            });
+            var result = await new OpenAITranslationGateway(
+                new HttpClient(new StubHandler(HttpStatusCode.TooManyRequests, body)),
+                new FakeSecretStore("secret"), reference, "model").TranslateAsync(Request(), CancellationToken.None);
+
+            Assert.AreEqual(expected, result.Error!.Code);
+            Assert.IsFalse(result.Error.Retryable);
+            Assert.IsFalse(result.Error.Message.Contains("sensitive provider body", StringComparison.Ordinal));
+        }
+    }
+
+    [TestMethod]
+    public async Task AdapterKeepsUnrecognizedOrOversize429Retryable()
+    {
+        var reference = SecretReference.Create("credential-manager:dwg-translator/openai").Value!;
+        foreach (var body in new[]
+        {
+            "{\"error\":{\"type\":\"rate_limit_error\",\"code\":\"rate_limit_exceeded\"}}",
+            "{invalid-json}",
+            new string('x', 8193)
+        })
+        {
+            var result = await new OpenAITranslationGateway(
+                new HttpClient(new StubHandler(HttpStatusCode.TooManyRequests, body)),
+                new FakeSecretStore("secret"), reference, "model").TranslateAsync(Request(), CancellationToken.None);
+            Assert.AreEqual("OPENAI_RATE_LIMITED", result.Error!.Code);
+            Assert.IsTrue(result.Error.Retryable);
+        }
+    }
+
+    [TestMethod]
     public async Task AdapterRejectsInvalidRequestBeforeReadingSecretOrCallingProvider()
     {
         var handler = new StubHandler(HttpStatusCode.OK, SuccessResponse);

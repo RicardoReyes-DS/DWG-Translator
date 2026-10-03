@@ -13,7 +13,10 @@ namespace DwgTranslator.Agent.Tests;
 [TestClass]
 public sealed class AgentWorkflowServiceTests
 {
-    private static readonly JsonSerializerOptions TestJson = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions TestJson = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(allowIntegerValues: false) }
+    };
     private string _root = null!;
     private string _input = null!;
     private string _output = null!;
@@ -113,7 +116,7 @@ public sealed class AgentWorkflowServiceTests
         var translationContext = plan.Data!["translationContext"]!.AsObject();
         Assert.AreEqual(TranslationReviewWorkflow.ContextualPromptTemplateVersion,
             translationContext["promptTemplateVersion"]!.GetValue<string>());
-        Assert.AreEqual(CadSemanticContextBuilder.PolicyVersionOneTwo,
+        Assert.AreEqual(CadSemanticContextBuilder.CurrentPolicyVersion,
             translationContext["contextPolicyVersion"]!.GetValue<string>());
         Assert.IsTrue(translationContext["includeNeighborExcerpts"]!.GetValue<bool>());
         Assert.IsTrue(translationContext["reviewIncludeText"]!.GetValue<bool>());
@@ -413,7 +416,23 @@ public sealed class AgentWorkflowServiceTests
             backend.Review!.ContextHash!, "sha256:" + new string('8', 64), "sha256:" + new string('9', 64));
         backend.ConfigureExternallyApproved(externalAuthority);
 
-        var completed = await processor.ApproveAndGenerateAsync(plan, reconciled, CancellationToken.None);
+        var staleApprovedProjection = await processor.ReconcileReviewAsync(plan, reconciled, null,
+            CancellationToken.None);
+        Assert.AreEqual(AgentBatchFileState.Reviewing, staleApprovedProjection.State,
+            staleApprovedProjection.ErrorCode);
+        Assert.AreEqual(backend.Job!.Version, staleApprovedProjection.JobVersion);
+        Assert.AreEqual(backend.Review.Version, staleApprovedProjection.ReviewVersion);
+        StringAssert.StartsWith(staleApprovedProjection.ReviewAutomationReceiptHash, "sha256:");
+        Assert.AreEqual(0, backend.GenerateCalls);
+
+        var wrongManifest = await processor.ReconcileReviewAsync(plan with
+        {
+            ManifestHash = "sha256:" + new string('0', 64)
+        }, reconciled, null, CancellationToken.None);
+        Assert.AreEqual("BATCH_APPROVED_REVIEW_INVALID", wrongManifest.ErrorCode);
+        Assert.AreEqual(0, backend.GenerateCalls);
+
+        var completed = await processor.ApproveAndGenerateAsync(plan, staleApprovedProjection, CancellationToken.None);
         Assert.AreEqual(AgentBatchFileState.Completed, completed.State,
             completed.ErrorCode + ":" + completed.ReviewGateCode);
         Assert.IsNull(completed.ErrorCode);
@@ -438,6 +457,74 @@ public sealed class AgentWorkflowServiceTests
         Assert.AreEqual(prepared.InputTokens, replay.InputTokens);
         Assert.AreEqual(prepared.OutputTokens, replay.OutputTokens);
         Assert.AreEqual(prepared.ProviderRequests, replay.ProviderRequests);
+    }
+
+    [TestMethod]
+    public async Task ApprovedReviewCorrectionRequiresExactFailedPrewriteBatchAndOneNumericSafeEdit()
+    {
+        var backend = new FakeBackend(highRisk: false, reviewSource: "NOTE 100 THEN 5",
+            reviewProposal: "NOTE 5 THEN 100");
+        var batchOutput = Path.Combine(_input, "batch-approved-correction");
+        Directory.CreateDirectory(batchOutput);
+        var workspace = Path.Combine(_root, "jobs");
+        var configuration = new AgentBetaConfiguration("dwg-agent-beta-bootstrap/1.0", "AgentBeta",
+            true, true, workspace, Path.Combine(_root, "logs"), AllowedDwgRoot: _input,
+            OpenAiEnabled: true, OutputDwgRoot: _output, BatchOutputRoots: [batchOutput],
+            ConfiguredAccessibleModels: [TranslationRouting.Terra, TranslationRouting.Luna, TranslationRouting.Sol],
+            BatchExecutionEnabled: true);
+        var workflow = new AgentWorkflowService(configuration, backend, () => _now,
+            cadProcessExists: () => false);
+        var processor = new ProductionAgentBatchFileProcessor(workflow, Path.Combine(_root, "correction-bindings"),
+            TimeSpan.FromMilliseconds(5), TimeSpan.FromSeconds(2));
+        var source = await AgentDwgPathPolicy.SnapshotAsync(_source, CancellationToken.None);
+        var output = Path.Combine(batchOutput, "source-ENG.dwg");
+        var manifest = new AgentBatchManifestEntry("source.dwg", _source, output,
+            source.Snapshot!.Bytes, source.Snapshot.Hash, source.Snapshot.LastWriteTimeUtc);
+        var plan = new AgentBatchPlan("correction-plan", Guid.NewGuid(), "sha256:" + new string('6', 64),
+            _input, batchOutput, "en-US", "Auto", ArchitecturalMepTerminologyPolicy.Version,
+            AgentBatchPolicy.ContextualPolicyVersion, [manifest],
+            new("approval", "consent", "generation", _now.AddMinutes(30), true), _now,
+            ContextPolicyVersion: CadSemanticContextBuilder.PolicyVersionOneTwo);
+        var prepared = await processor.PrepareAsync(plan, manifest, CancellationToken.None);
+        Assert.AreEqual(AgentBatchFileState.Reviewing, prepared.State,
+            prepared.ErrorCode + ":" + prepared.ReviewGateCode);
+        var oldAuthority = new ReviewAutomationReceipt(ReviewAutomationPolicy.ContextualAgentCreateNew,
+            plan.BatchId, plan.ManifestHash, backend.Review!.ContextHash!,
+            "sha256:" + new string('7', 64), "sha256:" + new string('8', 64));
+        backend.ConfigureExternallyApproved(oldAuthority);
+        var approved = backend.Job!;
+        var review = backend.Review!;
+        var batch = new AgentBatchDocument(plan.BatchId, 9, "ReviewRequired", plan.ManifestHash,
+            _input, batchOutput, _now, _now, _now,
+            [new AgentBatchFileProgress(manifest.RelativePath, manifest.Sha256, manifest.OutputPath,
+                AgentBatchFileState.Failed, approved.JobId, ErrorCode: "BATCH_HUMAN_REVIEW_REQUIRED",
+                JobVersion: approved.Version, ReviewVersion: review.Version,
+                ReviewGateCode: "REVIEW_INVARIANT_FAILED")]);
+        var batchPath = Path.Combine(workspace, "batches", plan.BatchId.ToString("D"), "batch.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(batchPath)!);
+        File.WriteAllText(batchPath, JsonSerializer.Serialize(batch, TestJson));
+        var newAuthority = oldAuthority with
+        {
+            ReviewerReportHash = "sha256:" + new string('9', 64),
+            QaReportHash = "sha256:" + new string('a', 64)
+        };
+        var decision = new AgentReviewDecision(review.Rows.Single().SegmentId, "edit", "NOTE 100 THEN 5");
+        AgentTranslationReviewApplyRequest Request(string key) => new(approved.JobId, approved.Version,
+            [decision], false, null, key, review.Version, review.ContextHash, newAuthority,
+            ReviseApproved: true);
+
+        var denied = await workflow.ApplyReviewAsync(Request("correction-wrong-batch"), CancellationToken.None);
+        Assert.AreEqual("APPROVED_REVIEW_BATCH_EVIDENCE_INVALID", denied.Error!.Code);
+        Assert.AreEqual(approved.Version, backend.Job!.Version);
+        File.WriteAllText(batchPath, JsonSerializer.Serialize(batch with { State = "CompletedWithFailures" }, TestJson));
+        var corrected = await workflow.ApplyReviewAsync(Request("correction-exact-batch"), CancellationToken.None);
+        Assert.IsTrue(corrected.Success, corrected.Error?.Code);
+        Assert.IsTrue(corrected.Data!["revisedApproved"]!.GetValue<bool>());
+        Assert.AreEqual(approved.Version + 1, backend.Job!.Version);
+        Assert.AreEqual(review.Version + 1, backend.Review!.Version);
+        Assert.AreEqual(newAuthority, backend.Review.ReviewAutomationReceipt);
+        Assert.AreEqual(0, backend.GenerateCalls);
+        Assert.IsFalse(File.Exists(output));
     }
 
     [TestMethod]
@@ -1517,6 +1604,33 @@ public sealed class AgentWorkflowServiceTests
                 };
                 LastAutomationAuthority = automationAuthority;
                 Job = Job! with { State = JobState.Approved, Version = Job.Version + 1, UpdatedAtUtc = DateTimeOffset.UtcNow };
+                return Task.FromResult(Results.Success(Job));
+            }
+        }
+
+        public Task<Result<JobDocument>> ReviseApprovedReviewAsync(Guid jobId, long expectedJobVersion,
+            IReadOnlyList<ReviewDecisionInput> decisions, long expectedReviewVersion,
+            ReviewAutomationReceipt automationAuthority, CancellationToken cancellationToken)
+        {
+            lock (_gate)
+            {
+                if (Job is null || Job.JobId != jobId || Job.State != JobState.Approved ||
+                    Job.Version != expectedJobVersion || Review is null || Review.Version != expectedReviewVersion ||
+                    decisions.Count != Review.Rows.Count)
+                    return Task.FromResult(Failure<JobDocument>("APPROVED_REVIEW_CORRECTION_BINDING_INVALID"));
+                var byId = decisions.ToDictionary(item => item.SegmentId, StringComparer.Ordinal);
+                Review = Review with
+                {
+                    Version = Review.Version + 1,
+                    Rows = Review.Rows.Select(row => row with
+                    {
+                        State = SegmentState.Approved,
+                        FinalText = byId[row.SegmentId].FinalText!
+                    }).ToArray(),
+                    ReviewAutomationReceipt = automationAuthority
+                };
+                Job = Job with { Version = Job.Version + 1, UpdatedAtUtc = DateTimeOffset.UtcNow };
+                LastAutomationAuthority = automationAuthority;
                 return Task.FromResult(Results.Success(Job));
             }
         }

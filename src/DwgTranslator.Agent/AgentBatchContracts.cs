@@ -85,7 +85,8 @@ public sealed record AgentBatchDocument(Guid BatchId, long Version, string State
     string? ReviewReconciliationIdempotencyKey = null,
     string? RefreshedGenerationApprovalId = null,
     string? RefreshedGenerationApproval = null,
-    DateTimeOffset? RefreshedGenerationApprovalExpiresAtUtc = null);
+    DateTimeOffset? RefreshedGenerationApprovalExpiresAtUtc = null,
+    int ReviewReconciliationRetryCount = 0);
 
 public interface IAgentBatchFileProcessor
 {

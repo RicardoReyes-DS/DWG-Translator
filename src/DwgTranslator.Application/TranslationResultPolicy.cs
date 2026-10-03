@@ -212,7 +212,8 @@ public static class TranslationResultPolicy
             !ContractPatterns.Sha256().IsMatch(context.ContextHash ?? string.Empty) ||
             !ContractPatterns.Sha256().IsMatch(context.SemanticKey ?? string.Empty) ||
             context.SheetRole != (context.Space == "PaperSpace" ? "Sheet" : "Model") ||
-            context.Discipline is not ("Unknown" or "Architectural" or "Mechanical" or "Electrical" or "Plumbing" or "Fire" or "Controls") ||
+            context.Discipline is not ("Unknown" or "Architectural" or "Structural" or "Mechanical" or "Electrical" or "Plumbing" or "Fire" or "Controls") ||
+            (context.Discipline == "Structural" && context.ContextVersion != CadSemanticContextBuilder.PolicyVersionOneThree) ||
             context.DisciplineConflict is null || context.DisciplineConflict == true && context.Discipline != "Unknown" ||
             (context.ContextVersion == CadSemanticContextBuilder.PolicyVersionOneZero && context.DisciplineResolution is not null) ||
             (context.ContextVersion == CadSemanticContextBuilder.PolicyVersionOneOne &&
@@ -220,10 +221,19 @@ public static class TranslationResultPolicy
             (context.ContextVersion == CadSemanticContextBuilder.PolicyVersionOneTwo &&
                 context.DisciplineResolution is not (null or CadSemanticContextBuilder.LocalEvidenceOverridesDrawingHint or
                     CadSemanticContextBuilder.DrawingNameArchitecturalFallback)) ||
+            (context.ContextVersion == CadSemanticContextBuilder.PolicyVersionOneThree &&
+                context.DisciplineResolution is not (null or CadSemanticContextBuilder.LocalEvidenceOverridesDrawingHint or
+                    CadSemanticContextBuilder.DrawingNameArchitecturalFallback or
+                    CadSemanticContextBuilder.DrawingNameElectricalFallback or
+                    CadSemanticContextBuilder.DrawingNameStructuralFallback)) ||
             (context.DisciplineResolution is not null &&
                 (context.DisciplineConflict == true || context.Discipline is "Unknown" or "Controls")) ||
             (context.DisciplineResolution == CadSemanticContextBuilder.DrawingNameArchitecturalFallback &&
                 context.Discipline != "Architectural") ||
+            (context.DisciplineResolution == CadSemanticContextBuilder.DrawingNameElectricalFallback &&
+                context.Discipline != "Electrical") ||
+            (context.DisciplineResolution == CadSemanticContextBuilder.DrawingNameStructuralFallback &&
+                context.Discipline != "Structural") ||
             context.XBand is null or < 0 or > 15 || context.YBand is null or < 0 or > 15 ||
             context.Signals is null || context.Signals.Count > 8 ||
             context.Signals.Any(signal => signal is not ("CEILING_CONTEXT" or "RAISED_FLOOR_CONTEXT" or "ROOF_CONTEXT" or "VERTICAL_LEVEL_CONTEXT_CONFLICT")) ||

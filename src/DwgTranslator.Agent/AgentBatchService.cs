@@ -357,7 +357,8 @@ public sealed class AgentBatchService
         {
             var document = LoadBatch(request.BatchId);
             if (document is null) return Failure(command, "BATCH_NOT_FOUND", "The batch was not found.");
-            if (document.ReviewReconciliationIdempotencyKey is not null)
+            var retry = CanRetryFailedReviewReconciliation(document, request);
+            if (document.ReviewReconciliationIdempotencyKey is not null && !retry)
                 return document.ReviewReconciliationIdempotencyKey == request.IdempotencyKey
                     ? Success(command, JsonSerializer.SerializeToNode(new
                     {
@@ -367,9 +368,9 @@ public sealed class AgentBatchService
                         idempotentReplay = true
                     }, Json))
                     : Failure(command, "IDEMPOTENCY_CONFLICT", "Batch review reconciliation already used a different idempotency key.");
-            if (document.Version != request.ExpectedBatchVersion || document.State != "ReviewRequired")
+            if (!retry && (document.Version != request.ExpectedBatchVersion || document.State != "ReviewRequired"))
                 return Failure(command, "BATCH_VERSION_CONFLICT", "The batch version or state changed.");
-            if (document.Files.Count == 0 || document.Files.Any(file => file.State != AgentBatchFileState.Reviewing || file.JobId is null))
+            if (!retry && (document.Files.Count == 0 || document.Files.Any(file => file.State != AgentBatchFileState.Reviewing || file.JobId is null)))
                 return Failure(command, "BATCH_REVIEW_RECONCILIATION_INVALID_STATE", "Every batch file must have an authoritative review job.");
             next = document with
             {
@@ -383,7 +384,13 @@ public sealed class AgentBatchService
                 RefreshedGenerationApprovalId = null,
                 RefreshedGenerationApproval = null,
                 RefreshedGenerationApprovalExpiresAtUtc = null,
-                Files = document.Files.Select(file => file with { State = AgentBatchFileState.Queued }).ToArray()
+                ReviewReconciliationRetryCount = retry ? 1 : 0,
+                Files = document.Files.Select(file => file with
+                {
+                    State = AgentBatchFileState.Queued,
+                    ErrorCode = null,
+                    Retryable = false
+                }).ToArray()
             };
             SaveBatch(next);
         }
@@ -400,6 +407,22 @@ public sealed class AgentBatchService
             writesDwg = false
         }, Json));
     }
+
+    private bool CanRetryFailedReviewReconciliation(AgentBatchDocument document,
+        AgentBatchReconcileReviewRequest request) =>
+        document.ReviewReconciliationIdempotencyKey == request.IdempotencyKey &&
+        document.Version == request.ExpectedBatchVersion &&
+        document.State == "RecoveryRequired" &&
+        document.ErrorCode == "BATCH_REVIEW_RECONCILIATION_FAILED" &&
+        document.ReviewReconciliationRetryCount == 0 &&
+        !_cadProcessExists() &&
+        document.Files.Count > 0 && document.Files.All(file =>
+            file.State == AgentBatchFileState.Failed &&
+            (file.ErrorCode is "BATCH_CHILD_REVIEW_NOT_READY" or "BATCH_SUPERSEDING_APPROVED_REVIEW_INVALID") &&
+            file.JobId is { } jobId && file.JobVersion > 0 &&
+            file.GenerateOperationId is null && file.OutputHash is null &&
+            !File.Exists(file.OutputPath) && !Directory.Exists(file.OutputPath) &&
+            !HasContextRecoveryArtifacts(file.OutputPath, jobId));
 
     public AgentEnvelope Cancel(AgentBatchCancelRequest request)
     {
@@ -946,7 +969,7 @@ public sealed class AgentBatchService
         if (job.State == JobState.ReviewRequired)
             return new(AgentBatchRecoveryAction.ContinueFromReview, null);
         if (job.State == JobState.Approved)
-            return IsExactPendingApprovedQro02Generation(batch, plan, file, job, data)
+            return IsExactPendingApprovedHistoricalGeneration(batch, plan, file, job, data)
                 ? FreshRetry(plan)
                 : IsExactPendingApprovedSupersedingGeneration(batch, plan, file, job, data)
                     ? new(AgentBatchRecoveryAction.ContinueFromReview, null)
@@ -972,6 +995,16 @@ public sealed class AgentBatchService
                 ? new(AgentBatchRecoveryAction.ResumeTranslationMissingOnly, null)
                 : new(null, new("BATCH_RECOVERY_CHILD_STATE_DIVERGED",
                     "OpenAI-unavailable recovery requires an exact failed prepare operation and an untampered partial translation checkpoint."));
+        if (string.Equals(code, "OPENAI_RATE_LIMITED", StringComparison.Ordinal))
+        {
+            if (MissingOnlyResumeEvidence(batch, plan, file, manifest, job, data, failure,
+                    "OPENAI_RATE_LIMITED", expectedRetryable: true))
+                return new(AgentBatchRecoveryAction.ResumeTranslationMissingOnly, null);
+            return NoProgressRateLimitEvidence(batch, plan, file, job, data, failure)
+                ? FreshRetry(plan)
+                : new(null, new("BATCH_RECOVERY_CHILD_STATE_DIVERGED",
+                    "Rate-limit recovery requires an exact failed operation and a valid partial review or no review artifact."));
+        }
         if (string.Equals(code, "TOKEN_INTEGRITY_FAILED", StringComparison.Ordinal))
             return MissingOnlyResumeEvidence(batch, plan, file, manifest, job, data, failure,
                     "TOKEN_INTEGRITY_FAILED", expectedRetryable: false)
@@ -1279,6 +1312,37 @@ public sealed class AgentBatchService
         return true;
     }
 
+    private bool NoProgressRateLimitEvidence(
+        AgentBatchDocument batch,
+        AgentBatchPlan plan,
+        AgentBatchFileProgress file,
+        JobDocument job,
+        DwgTranslationJobData data,
+        JsonObject? failure)
+    {
+        const string code = "OPENAI_RATE_LIMITED";
+        if (file.State != AgentBatchFileState.Failed || file.JobId != job.JobId ||
+            file.JobVersion != job.Version || !file.Retryable || file.ErrorCode != code ||
+            failure?["code"]?.GetValue<string>() != code ||
+            failure?["stage"]?.GetValue<string>() != "Translation" ||
+            failure?["retryable"]?.GetValue<bool>() != true ||
+            !AgentWorkflowFileStore.ValidOpaque(file.PrepareOperationId ?? string.Empty) ||
+            plan.Policy != AgentBatchPolicy.ContextualPolicyVersion ||
+            data.Specification.ReviewAutomationScope is not { } scope ||
+            scope.BatchId != batch.BatchId || scope.ManifestHash != batch.ManifestHash ||
+            scope.PolicyVersion != plan.Policy || data.Segments is not { Count: > 0 })
+            return false;
+
+        var reviewPath = Path.Combine(_configuration.WorkspaceRoot, job.JobId.ToString("D"), "review");
+        if (Directory.Exists(reviewPath) || File.Exists(reviewPath)) return false;
+        var operation = Read<AgentWorkflowOperation>(Path.Combine(
+            _configuration.LogRoot, "workflow", "operations", file.PrepareOperationId + ".json"));
+        return operation is not null && operation.OperationId == file.PrepareOperationId &&
+            operation.Kind == "translation.prepare" && operation.JobId == job.JobId &&
+            operation.State == "Failed" && operation.Stage == "Failed" &&
+            operation.ErrorCode == code && operation.Retryable;
+    }
+
     private static string JobConfigurationHash(DwgTranslationJobSpecification specification)
     {
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(specification, Json));
@@ -1297,7 +1361,7 @@ public sealed class AgentBatchService
         var exactFailedProjection = file.State == AgentBatchFileState.Failed && file.JobId == job.JobId &&
             file.JobVersion == job.Version && string.Equals(file.ErrorCode, code, StringComparison.Ordinal) &&
             AgentWorkflowFileStore.ValidOpaque(file.GenerateOperationId ?? string.Empty);
-        var exactStaleProjection = IsExactStaleQro02BootstrapProjection(batch, plan, file, job, data);
+        var exactStaleProjection = IsExactStaleHistoricalBootstrapProjection(batch, plan, file, job, data);
         if ((!exactFailedProjection && !exactStaleProjection) || file.Retryable ||
             string.IsNullOrWhiteSpace(data.ConfigurationHash) || failure is null ||
             !failure.ContainsKey("category") || !failure.ContainsKey("retryable") || !failure.ContainsKey("stage") ||
@@ -1389,7 +1453,7 @@ public sealed class AgentBatchService
         }
     }
 
-    private bool IsExactPendingApprovedQro02Generation(
+    private bool IsExactPendingApprovedHistoricalGeneration(
         AgentBatchDocument batch,
         AgentBatchPlan plan,
         AgentBatchFileProgress file,
@@ -1492,7 +1556,7 @@ public sealed class AgentBatchService
         (review is null || (review.JobId == job.JobId && review.Version > 0 &&
                             file.ReviewVersion == review.Version - 1));
 
-    private bool IsExactStaleQro02BootstrapProjection(
+    private bool IsExactStaleHistoricalBootstrapProjection(
         AgentBatchDocument batch,
         AgentBatchPlan plan,
         AgentBatchFileProgress file,

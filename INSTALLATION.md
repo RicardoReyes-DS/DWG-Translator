@@ -21,7 +21,7 @@ Desde la raíz del clon:
 ./scripts/Build-Portable.ps1 -CoreOnly -OutputDirectory ./artifacts/core-check
 ```
 
-Esta primera pasada prueba 361 casos y publica GUI, Host, CLI y MCP sin CAD. Para el paquete completo, usa **un directorio de salida nuevo**:
+Esta primera pasada ejecuta las tres suites de pruebas y publica GUI, Host, CLI y MCP sin CAD. Para el paquete completo, usa **un directorio de salida nuevo**:
 
 ```powershell
 ./scripts/Build-Portable.ps1 -AutoCADInstallDir '<DIRECTORIO_DE_REFERENCIAS_CAD>' -OutputDirectory ./artifacts/portable
@@ -77,3 +77,7 @@ La configuración del Host permite sólo operaciones de lectura por defecto. Par
 | Traducción operativa | Además de CAD validado, credencial y modelo configurados con autorización, traducción y revisión aprobadas, escritura a salida distinta y verificación final. |
 
 No declares los dos últimos niveles a partir de un build o una comprobación de salud. Conserva evidencia técnica sin texto de planos ni secretos. Si una etapa falla, detén la siguiente y comunica el error exacto. Para revertir una preparación local, identifica primero los procesos y archivos creados por **esa** instalación; detener servicios, restaurar configuración anterior, borrar credenciales o eliminar carpetas requiere la autorización pertinente.
+
+### Corrección de una revisión aprobada antes de escribir
+
+Si un archivo de lote termina con `BATCH_HUMAN_REVIEW_REQUIRED` y gate `REVIEW_INVARIANT_FAILED`, conserva el estado del lote y comprueba que no existe salida ni operación CAD para ese archivo. Cuando el lote esté en `CompletedWithFailures`, el CLI admite `translation-review-apply --revise-approved` con la lista **completa** de decisiones, las versiones actuales del job y la revisión, el hash de contexto y un recibo nuevo de revisión/QA. Sólo se permite cambiar el texto final de un segmento y la corrección debe pasar las invariantes numéricas y CAD. La operación no llama al proveedor ni abre AutoCAD. Después crea un `generation-plan` nuevo para ese job y solicita la autorización exacta de `generate`; verifica la salida por readback y revisión visual. El lote original conserva su fallo histórico; registra los archivos recuperados por separado. Consulta [ADR-0005](docs/ADR/0005-prewrite-review-correction.md).
